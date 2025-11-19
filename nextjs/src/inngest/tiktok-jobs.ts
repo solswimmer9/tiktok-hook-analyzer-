@@ -3,7 +3,7 @@ import { supabaseServer } from "@/lib/clients/supabase";
 import { tiktokApi, ProcessedTikTokVideo } from "@/lib/clients/tiktok";
 import { videoProcessor } from "@/lib/video-processing";
 import { r2Client } from "@/lib/clients/r2";
-import { geminiClient } from "@/lib/clients/gemini";
+import { geminiClient, HookAnalysisResult } from "@/lib/clients/gemini";
 import { Database } from "@shared-types/database.types";
 
 // Search and process TikTok videos for a search term
@@ -289,10 +289,10 @@ export const generateTrendAnalysis = inngestClient.createFunction(
     id: "tiktok/generate-trends",
     retries: 3, // Retry failed jobs up to 3 times
   },
-  {
-    event: "tiktok/generate-trends",
-    cron: "0 6 * * *", // Run daily at 6 AM
-  },
+  [
+    { event: "tiktok/generate-trends" },
+    { cron: "0 6 * * *" } // Run daily at 6 AM
+  ],
   async ({ event, step, logger }) => {
     const { date } = event.data;
     const analysisDate = date || new Date().toISOString().split('T')[0];
@@ -335,7 +335,7 @@ export const generateTrendAnalysis = inngestClient.createFunction(
 
     // Step 2: Analyze trends with Gemini
     const trendAnalysis = await step.run("gemini: analyze trends", async () => {
-      const analyses = hookAnalyses.map(h => h.analysis_result);
+      const analyses = hookAnalyses.map(h => h.analysis_result as unknown as HookAnalysisResult);
       const result = await geminiClient.analyzeTrends(analyses);
       logger.info(`Trend analysis completed with ${result.commonPhrases.length} common phrases`);
       return result;

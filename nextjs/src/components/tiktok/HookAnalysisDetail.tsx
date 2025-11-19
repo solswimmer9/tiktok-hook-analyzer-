@@ -4,12 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { trpc } from "@/utils/trpc";
-import { 
-  Brain, 
-  VideoIcon, 
-  Eye, 
-  Heart, 
-  Share, 
+import {
+  Brain,
+  VideoIcon,
+  Eye,
+  Heart,
+  Share,
   MessageCircle,
   TrendingUp,
   Zap,
@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Database } from "@shared-types/database.types";
+import { HookAnalysisResult } from "@/lib/clients/gemini";
 
 type VideoWithAnalysis = Database['public']['Tables']['tiktok_videos']['Row'] & {
   search_terms: Database['public']['Tables']['search_terms']['Row'];
@@ -34,7 +35,7 @@ interface HookAnalysisDetailProps {
 
 export function HookAnalysisDetail({ videoId }: HookAnalysisDetailProps) {
   const { data: videoData, isLoading } = trpc.tiktok.getVideoById.useQuery({ id: videoId });
-  const video = videoData as VideoWithAnalysis;
+  const video = videoData as unknown as VideoWithAnalysis;
 
   if (isLoading) {
     return (
@@ -65,7 +66,7 @@ export function HookAnalysisDetail({ videoId }: HookAnalysisDetailProps) {
   }
 
   const analysis = video.hook_analysis[0] as Database['public']['Tables']['hook_analysis']['Row'];
-  const result = analysis?.analysis_result;
+  const result = analysis?.analysis_result as unknown as HookAnalysisResult;
   const overallScore = result?.overallScore || 0;
 
   const formatNumber = (num: number) => {
@@ -104,7 +105,7 @@ export function HookAnalysisDetail({ videoId }: HookAnalysisDetailProps) {
                     <VideoIcon className="h-12 w-12 text-muted-foreground" />
                   </div>
                 )}
-                
+
                 {/* Overall Score Overlay */}
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                   <div className="text-center text-white">

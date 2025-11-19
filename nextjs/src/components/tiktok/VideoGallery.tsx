@@ -6,13 +6,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { trpc } from "@/utils/trpc";
 import { useState, useEffect } from "react";
 import { toast } from "@/lib/utils";
-import { 
-  VideoIcon, 
-  MoreHorizontal, 
-  ExternalLink, 
-  Eye, 
-  Heart, 
-  Share, 
+import {
+  VideoIcon,
+  MoreHorizontal,
+  ExternalLink,
+  Eye,
+  Heart,
+  Share,
   MessageCircle,
   Clock,
   User,
@@ -62,8 +62,9 @@ export function VideoGallery({ searchTermId, searchQuery }: VideoGalleryProps) {
           return videos as TikTokVideo[];
         }
         // Otherwise, append new videos
+        const videoList = videos as TikTokVideo[];
         const existingIds = new Set(prev.map(v => v.id));
-        const newVideos = videos.filter(v => !existingIds.has(v.id));
+        const newVideos = videoList.filter(v => !existingIds.has(v.id));
         return [...prev, ...newVideos] as TikTokVideo[];
       });
     }
@@ -88,10 +89,10 @@ export function VideoGallery({ searchTermId, searchQuery }: VideoGalleryProps) {
   // Filter videos by search query
   const filteredVideos = searchQuery
     ? allLoadedVideos.filter(video =>
-        video.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        video.creator?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        video.creator_username?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      video.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      video.creator?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      video.creator_username?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : allLoadedVideos;
 
   const formatNumber = (num: number) => {
@@ -150,7 +151,7 @@ export function VideoGallery({ searchTermId, searchQuery }: VideoGalleryProps) {
         <CardHeader>
           <CardTitle>Videos</CardTitle>
           <CardDescription>
-            {searchQuery || searchTermId 
+            {searchQuery || searchTermId
               ? "No videos match your current filters"
               : "No videos found. Create a search term to start downloading videos."
             }
@@ -163,7 +164,7 @@ export function VideoGallery({ searchTermId, searchQuery }: VideoGalleryProps) {
               {searchQuery || searchTermId ? "No matching videos" : "No videos yet"}
             </h3>
             <p className="text-muted-foreground mb-4">
-              {searchQuery || searchTermId 
+              {searchQuery || searchTermId
                 ? "Try adjusting your filters or search terms"
                 : "Add a search term to start downloading and analyzing TikTok videos"
               }
@@ -208,7 +209,7 @@ export function VideoGallery({ searchTermId, searchQuery }: VideoGalleryProps) {
                   <VideoIcon className="h-12 w-12 text-muted-foreground" />
                 </div>
               )}
-              
+
               {/* Video duration */}
               {video.duration && (
                 <Badge className="absolute bottom-2 right-2 bg-black/70 text-white">
@@ -289,7 +290,7 @@ export function VideoGallery({ searchTermId, searchQuery }: VideoGalleryProps) {
                         </Button>
                       </Link>
                     )}
-                    
+
                     {video.video_url && (
                       <Button size="sm" variant="outline" asChild>
                         <a href={video.video_url} target="_blank" rel="noopener noreferrer">

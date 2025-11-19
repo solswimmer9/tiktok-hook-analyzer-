@@ -1,3 +1,6 @@
+// Stripe client - currently not in use
+// Uncomment and install 'stripe' package when needed
+/*
 import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -5,3 +8,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 export default stripe;
+*/
+
+// Temporary export to prevent build errors
+export default null;

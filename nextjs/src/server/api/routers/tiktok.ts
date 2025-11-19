@@ -1,5 +1,6 @@
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { inngestClient } from "@/lib/clients/inngest";
+import { ClusteringService } from "@/server/services/clustering";
 import { z } from "zod";
 
 export const tiktokRouter = createTRPCRouter({
@@ -419,5 +420,14 @@ export const tiktokRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+
+
+  // Clustering
+  getHookClusters: protectedProcedure
+    .input(z.object({ k: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      const clusteringService = new ClusteringService(ctx.supabase as any);
+      return await clusteringService.performClustering(ctx.user.id, input.k);
     }),
 });

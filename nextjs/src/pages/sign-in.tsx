@@ -2,6 +2,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/utils/supabase/component";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { appConfig } from "@/config/app";
 import { Button } from "@/components/ui/button";
@@ -205,71 +206,68 @@ export default function Page() {
 
           {/* Only show form if user is not signed in */}
           {!user && !userLoading && (
-              <form className="mt-8 space-y-6" onSubmit={handleSignIn}>
-                <div className="-space-y-px rounded-md shadow-sm">
-                  <div>
-                    <label htmlFor="email" className="sr-only">
-                      Email address
-                    </label>
-                    <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="relative block w-full rounded-t-md border-0 px-4 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-emerald-600 sm:text-sm sm:leading-6"
-                      placeholder="Email address"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="password" className="sr-only">
-                      Password
-                    </label>
-                    <input
-                      id="password"
-                      name="password"
-                      type="password"
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="relative block w-full rounded-b-md border-0 px-4 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-emerald-600 sm:text-sm sm:leading-6"
-                      placeholder="Password"
-                    />
-                  </div>
-                </div>
-
+            <form className="mt-8 space-y-6" onSubmit={handleSignIn}>
+              <div className="-space-y-px rounded-md shadow-sm">
                 <div>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="group relative flex w-full justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 disabled:bg-emerald-300"
-                  >
-                    {isSubmitting ? "Signing in..." : "Sign in"}
-                  </button>
+                  <label htmlFor="email" className="sr-only">
+                    Email address
+                  </label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="relative block w-full rounded-t-md border-0 px-4 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-emerald-600 sm:text-sm sm:leading-6"
+                    placeholder="Email address"
+                  />
                 </div>
-                {appConfig.auth.enablePasswordReset && (
-                  <div className="text-center">
-                    <a
-                      href="/forgot-password"
-                      className="text-sm text-emerald-600 hover:text-emerald-500"
-                    >
-                      Forgot your password?
-                    </a>
-                  </div>
-                )}
-                {appConfig.auth.enableSignUp && (
-                  <div className="text-center">
-                    <a
-                      href="/sign-up"
-                      className="text-sm text-emerald-600 hover:text-emerald-500"
-                    >
-                      Don't have an account? Sign up
-                    </a>
-                  </div>
-                )}
-              </form>
-            )}
+                <div>
+                  <label htmlFor="password" className="sr-only">
+                    Password
+                  </label>
+                  <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="relative block w-full rounded-b-md border-0 px-4 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-emerald-600 sm:text-sm sm:leading-6"
+                    placeholder="Password"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="group relative flex w-full justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 disabled:bg-emerald-300"
+                >
+                  {isSubmitting ? "Signing in..." : "Sign in"}
+                </button>
+              </div>
+              {appConfig.auth.enablePasswordReset && (
+                <div className="text-center">
+                  <Link href="/forgot-password/" className="font-medium text-indigo-600 hover:text-indigo-500">
+                    Forgot your password?
+                  </Link>
+                </div>
+              )}
+              {appConfig.auth.enableSignUp && (
+                <div className="text-center">
+                  <Link
+                    href="/sign-up/"
+                    className="text-sm text-emerald-600 hover:text-emerald-500"
+                  >
+                    Don't have an account? Sign up
+                  </Link>
+                </div>
+              )}
+            </form>
+          )}
         </div>
       )}
     </div>

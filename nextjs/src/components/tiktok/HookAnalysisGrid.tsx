@@ -4,12 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/utils/trpc";
 import { useState } from "react";
-import { 
-  Brain, 
-  VideoIcon, 
-  Eye, 
-  Heart, 
-  Share, 
+import {
+  Brain,
+  VideoIcon,
+  Eye,
+  Heart,
+  Share,
   MessageCircle,
   TrendingUp,
   Zap,
@@ -18,6 +18,7 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import { Database } from "@shared-types/database.types";
+import { HookAnalysisResult } from "@/lib/clients/gemini";
 
 type HookAnalysis = Database['public']['Tables']['hook_analysis']['Row'] & {
   tiktok_videos: Database['public']['Tables']['tiktok_videos']['Row'] & {
@@ -42,16 +43,19 @@ export function HookAnalysisGrid({ searchTermId, searchQuery }: HookAnalysisGrid
 
   const allAnalyses = (analyses || []) as HookAnalysis[];
   const hasNextPage = false; // Simplified for now
-  const fetchNextPage = () => {};
-  
+  const fetchNextPage = () => { };
+
   // Filter analyses by search query
   const filteredAnalyses = searchQuery
-    ? allAnalyses.filter(analysis => 
+    ? allAnalyses.filter(analysis => {
+      const result = analysis.analysis_result as unknown as HookAnalysisResult;
+      return (
         analysis.tiktok_videos.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         analysis.tiktok_videos.creator?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        analysis.analysis_result?.engagementTactics?.hook_type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        analysis.analysis_result?.openingLines?.transcript?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+        result?.engagementTactics?.hook_type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        result?.openingLines?.transcript?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    })
     : allAnalyses;
 
   const formatNumber = (num: number) => {
@@ -97,7 +101,7 @@ export function HookAnalysisGrid({ searchTermId, searchQuery }: HookAnalysisGrid
         <CardHeader>
           <CardTitle>Hook Analysis</CardTitle>
           <CardDescription>
-            {searchQuery || searchTermId 
+            {searchQuery || searchTermId
               ? "No analysis match your current filters"
               : "No hook analysis found. Videos are still being processed or no videos have been analyzed yet."
             }
@@ -110,7 +114,7 @@ export function HookAnalysisGrid({ searchTermId, searchQuery }: HookAnalysisGrid
               {searchQuery || searchTermId ? "No matching analysis" : "No analysis yet"}
             </h3>
             <p className="text-muted-foreground mb-4">
-              {searchQuery || searchTermId 
+              {searchQuery || searchTermId
                 ? "Try adjusting your filters or search terms"
                 : "Videos are being processed. Hook analysis will appear here once complete."
               }
@@ -141,7 +145,7 @@ export function HookAnalysisGrid({ searchTermId, searchQuery }: HookAnalysisGrid
       <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
         {filteredAnalyses.map((analysis: HookAnalysis) => {
           const video = analysis.tiktok_videos;
-          const result = analysis.analysis_result as any;
+          const result = analysis.analysis_result as unknown as HookAnalysisResult;
           const overallScore = result?.overallScore || 0;
           const hookType = result?.engagementTactics?.hook_type || "Unknown";
           const effectiveness = result?.openingLines?.effectiveness || 0;

@@ -2,6 +2,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/utils/supabase/component";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { appConfig } from "@/config/app";
 
@@ -146,13 +147,14 @@ export default function Page() {
                   Sign up
                 </button>
               </div>
-              <div className="text-center">
-                <a
-                  href="/sign-in"
-                  className="text-sm text-emerald-600 hover:text-emerald-500"
+              <div className="text-center text-sm text-gray-600">
+                Already have an account?{" "}
+                <Link
+                  href="/sign-in/"
+                  className="font-medium text-indigo-600 hover:text-indigo-500"
                 >
-                  Already have an account? Sign in
-                </a>
+                  Sign in
+                </Link>
               </div>
             </form>
           </>

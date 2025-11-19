@@ -6,10 +6,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/utils/trpc";
 import { useState } from "react";
-import { 
-  TrendingUp, 
-  MessageSquare, 
-  Palette, 
+import {
+  TrendingUp,
+  MessageSquare,
+  Palette,
   Target,
   BarChart3,
   Calendar,
@@ -67,8 +67,9 @@ export function TrendAnalysisDashboard() {
 
   // If a specific trend is selected, show its details
   if (selectedTrend) {
-    const analysis = selectedTrend.analysis_results as any; // TODO: Define proper type for analysis_results JSON
-    
+    const trend = selectedTrend as unknown as TrendAnalysis;
+    const analysis = (trend.analysis_results as any); // TODO: Define proper type for analysis_results JSON
+
     return (
       <div className="space-y-6">
         <Card>
@@ -77,10 +78,10 @@ export function TrendAnalysisDashboard() {
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Calendar className="h-5 w-5" />
-                  Trend Analysis - {selectedTrend.date}
+                  Trend Analysis - {trend.date}
                 </CardTitle>
                 <CardDescription>
-                  Analysis of {selectedTrend.total_videos_analyzed} videos processed on this date
+                  Analysis of {trend.total_videos_analyzed} videos processed on this date
                 </CardDescription>
               </div>
               <Button variant="outline" onClick={() => setSelectedTrendId(null)}>
@@ -295,8 +296,8 @@ export function TrendAnalysisDashboard() {
         <CardContent>
           <div className="space-y-4">
             {trends.map((trend: TrendAnalysis) => (
-              <Card 
-                key={trend.id} 
+              <Card
+                key={trend.id}
                 className="cursor-pointer hover:shadow-md transition-shadow"
                 onClick={() => setSelectedTrendId(trend.id)}
               >
@@ -312,23 +313,23 @@ export function TrendAnalysisDashboard() {
                         Generated {formatDistanceToNow(new Date(trend.created_at), { addSuffix: true })}
                       </p>
                     </div>
-                    
+
                     <div className="flex items-center gap-4 text-sm">
-                      {trend.common_phrases && (
+                      {trend.common_phrases && Array.isArray(trend.common_phrases) && (
                         <div className="text-center">
-                          <div className="font-semibold">{trend.common_phrases.length}</div>
+                          <div className="font-semibold">{(trend.common_phrases as any[]).length}</div>
                           <div className="text-muted-foreground">Phrases</div>
                         </div>
                       )}
-                      {trend.visual_themes && (
+                      {trend.visual_themes && Array.isArray(trend.visual_themes) && (
                         <div className="text-center">
-                          <div className="font-semibold">{trend.visual_themes.length}</div>
+                          <div className="font-semibold">{(trend.visual_themes as any[]).length}</div>
                           <div className="text-muted-foreground">Themes</div>
                         </div>
                       )}
-                      {trend.engagement_patterns && (
+                      {trend.engagement_patterns && Array.isArray(trend.engagement_patterns) && (
                         <div className="text-center">
-                          <div className="font-semibold">{trend.engagement_patterns.length}</div>
+                          <div className="font-semibold">{(trend.engagement_patterns as any[]).length}</div>
                           <div className="text-muted-foreground">Patterns</div>
                         </div>
                       )}

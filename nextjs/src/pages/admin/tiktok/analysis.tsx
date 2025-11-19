@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { HookAnalysisGrid } from "@/components/tiktok/HookAnalysisGrid";
 import { HookAnalysisDetail } from "@/components/tiktok/HookAnalysisDetail";
+import { HookClusters } from "@/components/tiktok/HookClusters";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -115,6 +116,9 @@ export default function TikTokAnalysis() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Hook Clusters */}
+        <HookClusters />
 
         {/* Analysis Grid */}
         <HookAnalysisGrid
