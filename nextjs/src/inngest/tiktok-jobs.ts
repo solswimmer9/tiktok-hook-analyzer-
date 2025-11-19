@@ -199,6 +199,10 @@ export const downloadTikTokVideo = inngestClient.createFunction(
 export const analyzeVideoHook = inngestClient.createFunction(
   {
     id: "tiktok/analyze-hook",
+    concurrency: {
+      limit: 3, // Process max 3 videos concurrently to avoid rate limits
+    },
+    retries: 3, // Retry failed jobs up to 3 times
   },
   {
     event: "tiktok/analyze-hook",
@@ -283,6 +287,7 @@ export const analyzeVideoHook = inngestClient.createFunction(
 export const generateTrendAnalysis = inngestClient.createFunction(
   {
     id: "tiktok/generate-trends",
+    retries: 3, // Retry failed jobs up to 3 times
   },
   {
     event: "tiktok/generate-trends",

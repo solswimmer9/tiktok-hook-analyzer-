@@ -29,6 +29,8 @@ export interface HookAnalysisResult {
 class GeminiClient {
   private client: GoogleGenerativeAI;
   private model: any;
+  private readonly MAX_RETRIES = 5;
+  private readonly INITIAL_RETRY_DELAY = 1000; // 1 second
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -38,6 +40,71 @@ class GeminiClient {
 
     this.client = new GoogleGenerativeAI(apiKey);
     this.model = this.client.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  }
+
+  /**
+   * Sleep utility for retry delays
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Check if error is a rate limit error
+   */
+  private isRateLimitError(error: any): boolean {
+    const errorMessage = error?.message?.toLowerCase() || '';
+    const errorString = String(error).toLowerCase();
+
+    return (
+      errorMessage.includes('rate limit') ||
+      errorMessage.includes('quota exceeded') ||
+      errorMessage.includes('too many requests') ||
+      errorMessage.includes('resource exhausted') ||
+      errorString.includes('429') ||
+      error?.status === 429 ||
+      error?.code === 429
+    );
+  }
+
+  /**
+   * Retry a function with exponential backoff
+   */
+  private async retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    context: string
+  ): Promise<T> {
+    let lastError: any;
+
+    for (let attempt = 0; attempt < this.MAX_RETRIES; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error;
+
+        // Check if it's a rate limit error
+        if (this.isRateLimitError(error)) {
+          const delay = this.INITIAL_RETRY_DELAY * Math.pow(2, attempt);
+          const jitter = Math.random() * 1000; // Add jitter to prevent thundering herd
+          const totalDelay = delay + jitter;
+
+          console.warn(
+            `Rate limit hit for ${context}. Attempt ${attempt + 1}/${this.MAX_RETRIES}. ` +
+            `Retrying in ${Math.round(totalDelay)}ms...`
+          );
+
+          await this.sleep(totalDelay);
+          continue;
+        }
+
+        // If it's not a rate limit error, throw immediately
+        throw error;
+      }
+    }
+
+    // All retries exhausted
+    console.error(`All ${this.MAX_RETRIES} retry attempts exhausted for ${context}`);
+    throw lastError;
   }
 
   private getAnalysisPrompt(): string {
@@ -89,46 +156,48 @@ Provide detailed, actionable insights that would help creators improve their hoo
   }
 
   async analyzeVideoHook(base64Video: string): Promise<HookAnalysisResult> {
-    try {
-      const prompt = this.getAnalysisPrompt();
+    return this.retryWithBackoff(async () => {
+      try {
+        const prompt = this.getAnalysisPrompt();
 
-      const result = await this.model.generateContent([
-        prompt,
-        {
-          inlineData: {
-            mimeType: 'video/mp4',
-            data: base64Video,
+        const result = await this.model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              mimeType: 'video/mp4',
+              data: base64Video,
+            },
           },
-        },
-      ]);
+        ]);
 
-      const response = await result.response;
-      const text = response.text();
+        const response = await result.response;
+        const text = response.text();
 
-      // Parse JSON response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.error('Gemini response text:', text);
-        throw new Error('Invalid response format from Gemini - no JSON found in response');
+        // Parse JSON response
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          console.error('Gemini response text:', text);
+          throw new Error('Invalid response format from Gemini - no JSON found in response');
+        }
+
+        const analysis = JSON.parse(jsonMatch[0]);
+
+        // Validate required fields
+        if (!analysis.openingLines || !analysis.visualElements || !analysis.engagementTactics) {
+          console.error('Incomplete Gemini analysis:', analysis);
+          throw new Error('Incomplete analysis response from Gemini - missing required fields');
+        }
+
+        return analysis;
+      } catch (error) {
+        console.error('Error analyzing video with Gemini:', error);
+        if (error instanceof Error) {
+          // Preserve original error message
+          throw new Error(`Failed to analyze video hook: ${error.message}`);
+        }
+        throw new Error('Failed to analyze video hook: Unknown error');
       }
-
-      const analysis = JSON.parse(jsonMatch[0]);
-
-      // Validate required fields
-      if (!analysis.openingLines || !analysis.visualElements || !analysis.engagementTactics) {
-        console.error('Incomplete Gemini analysis:', analysis);
-        throw new Error('Incomplete analysis response from Gemini - missing required fields');
-      }
-
-      return analysis;
-    } catch (error) {
-      console.error('Error analyzing video with Gemini:', error);
-      if (error instanceof Error) {
-        // Preserve original error message
-        throw new Error(`Failed to analyze video hook: ${error.message}`);
-      }
-      throw new Error('Failed to analyze video hook: Unknown error');
-    }
+    }, 'analyzeVideoHook');
   }
 
   async analyzeTrends(hookAnalyses: HookAnalysisResult[]): Promise<{
@@ -138,8 +207,9 @@ Provide detailed, actionable insights that would help creators improve their hoo
     recommendations: string[];
     summary: string;
   }> {
-    try {
-      const prompt = `
+    return this.retryWithBackoff(async () => {
+      try {
+        const prompt = `
 Analyze the following TikTok hook analysis results and identify trends:
 
 ${JSON.stringify(hookAnalyses, null, 2)}
@@ -170,21 +240,22 @@ Focus on:
 5. Actionable recommendations for creators
 `;
 
-      const result = await this.model.generateContent([prompt]);
-      const response = await result.response;
-      const text = response.text();
+        const result = await this.model.generateContent([prompt]);
+        const response = await result.response;
+        const text = response.text();
 
-      // Parse JSON response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('Invalid trend analysis response format');
+        // Parse JSON response
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new Error('Invalid trend analysis response format');
+        }
+
+        return JSON.parse(jsonMatch[0]);
+      } catch (error) {
+        console.error('Error analyzing trends with Gemini:', error);
+        throw new Error('Failed to analyze hook trends');
       }
-
-      return JSON.parse(jsonMatch[0]);
-    } catch (error) {
-      console.error('Error analyzing trends with Gemini:', error);
-      throw new Error('Failed to analyze hook trends');
-    }
+    }, 'analyzeTrends');
   }
 
   async generateHookSuggestions(searchTerm: string, analysisResults: HookAnalysisResult[]): Promise<{
@@ -192,8 +263,9 @@ Focus on:
     rationale: string;
     examples: string[];
   }> {
-    try {
-      const prompt = `
+    return this.retryWithBackoff(async () => {
+      try {
+        const prompt = `
 Based on the analysis of TikTok videos for the search term "${searchTerm}", generate hook suggestions.
 
 Analysis data:
@@ -220,21 +292,22 @@ Focus on:
 4. Fresh approaches that haven't been overused
 `;
 
-      const result = await this.model.generateContent([prompt]);
-      const response = await result.response;
-      const text = response.text();
+        const result = await this.model.generateContent([prompt]);
+        const response = await result.response;
+        const text = response.text();
 
-      // Parse JSON response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('Invalid suggestion response format');
+        // Parse JSON response
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new Error('Invalid suggestion response format');
+        }
+
+        return JSON.parse(jsonMatch[0]);
+      } catch (error) {
+        console.error('Error generating hook suggestions:', error);
+        throw new Error('Failed to generate hook suggestions');
       }
-
-      return JSON.parse(jsonMatch[0]);
-    } catch (error) {
-      console.error('Error generating hook suggestions:', error);
-      throw new Error('Failed to generate hook suggestions');
-    }
+    }, 'generateHookSuggestions');
   }
 }
 
