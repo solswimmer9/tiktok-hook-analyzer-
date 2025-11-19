@@ -127,7 +127,7 @@ export function HookAnalysisGrid({ searchTermId, searchQuery }: HookAnalysisGrid
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <Card>
         <CardHeader>
           <CardTitle>Hook Analysis ({filteredAnalyses.length})</CardTitle>
@@ -137,18 +137,19 @@ export function HookAnalysisGrid({ searchTermId, searchQuery }: HookAnalysisGrid
         </CardHeader>
       </Card>
 
-      {/* Analysis Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {/* Analysis Grid - Improved spacing with gap-8 */}
+      <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
         {filteredAnalyses.map((analysis: HookAnalysis) => {
           const video = analysis.tiktok_videos;
-          const result = analysis.analysis_result as any; // TODO: Define proper type for analysis_result JSON
+          const result = analysis.analysis_result as any;
           const overallScore = result?.overallScore || 0;
           const hookType = result?.engagementTactics?.hook_type || "Unknown";
           const effectiveness = result?.openingLines?.effectiveness || 0;
           const openingText = result?.openingLines?.transcript || "No transcript available";
 
           return (
-            <Card key={analysis.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+            <Card key={analysis.id} className="overflow-hidden hover:shadow-lg transition-all duration-200">
+              {/* Thumbnail */}
               <div className="aspect-video bg-muted relative">
                 {video.thumbnail_url ? (
                   <img
@@ -161,126 +162,108 @@ export function HookAnalysisGrid({ searchTermId, searchQuery }: HookAnalysisGrid
                     <VideoIcon className="h-12 w-12 text-muted-foreground" />
                   </div>
                 )}
-                
-                {/* Overall Score Badge */}
-                <Badge 
-                  className={`absolute top-2 right-2 ${getScoreColor(overallScore)}`}
-                  variant={getScoreVariant(overallScore)}
-                >
-                  {overallScore}/100
-                </Badge>
 
-                {/* Hook Type Badge */}
-                <Badge className="absolute top-2 left-2 bg-blue-500">
+                {/* Hook Type Badge - Top Left */}
+                <Badge className="absolute top-3 left-3 bg-black/70 text-white border-0">
                   {hookType}
                 </Badge>
               </div>
 
-              <CardContent className="p-4">
-                <div className="space-y-4">
-                  {/* Title and Creator */}
-                  <div>
-                    <h3 className="font-semibold text-sm line-clamp-2 mb-1">
-                      {video.title || "Untitled"}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      by {video.creator || video.creator_username || "Unknown"}
-                    </p>
-                  </div>
-
-                  {/* Opening Lines */}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Zap className="h-4 w-4 text-yellow-500" />
-                      <span className="text-sm font-medium">Opening Hook</span>
-                      <Badge variant="outline" className="text-xs">
-                        {effectiveness}/10
-                      </Badge>
+              <CardContent className="p-6 space-y-6">
+                {/* MAIN FOCUS: Hook Score - Large and Prominent */}
+                <div className="flex items-center justify-center">
+                  <div className="text-center space-y-2">
+                    <div className="flex items-center justify-center gap-2">
+                      <Zap className="h-5 w-5 text-yellow-500" />
+                      <span className="text-sm font-medium text-muted-foreground">Opening Hook</span>
                     </div>
-                    <p className="text-xs text-muted-foreground line-clamp-3 bg-muted p-2 rounded">
+                    <div className={`text-5xl font-bold ${getScoreColor(effectiveness * 10)}`}>
+                      {effectiveness}<span className="text-2xl text-muted-foreground">/10</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground line-clamp-2 max-w-xs mx-auto">
                       "{openingText}"
                     </p>
                   </div>
+                </div>
 
-                  {/* Engagement Metrics */}
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="flex items-center gap-1">
-                      <Eye className="h-3 w-3" />
-                      {formatNumber(video.view_count || 0)}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Heart className="h-3 w-3" />
-                      {formatNumber(video.like_count || 0)}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Share className="h-3 w-3" />
-                      {formatNumber(video.share_count || 0)}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <MessageCircle className="h-3 w-3" />
-                      {formatNumber(video.comment_count || 0)}
+                {/* Overall Score Bar */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Overall Score</span>
+                    <span className={`text-lg font-bold ${getScoreColor(overallScore)}`}>
+                      {overallScore}%
+                    </span>
+                  </div>
+                  <Progress value={overallScore} className="h-3" />
+                </div>
+
+                {/* Title and Creator - Cleaner */}
+                <div className="space-y-1">
+                  <h3 className="font-semibold text-sm line-clamp-2">
+                    {video.title || "Untitled"}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    by {video.creator || video.creator_username || "Unknown"}
+                  </p>
+                </div>
+
+                {/* Engagement Metrics - Compact */}
+                <div className="flex items-center justify-between text-xs text-muted-foreground border-y py-3">
+                  <div className="flex items-center gap-1">
+                    <Eye className="h-3.5 w-3.5" />
+                    {formatNumber(video.view_count || 0)}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Heart className="h-3.5 w-3.5" />
+                    {formatNumber(video.like_count || 0)}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Share className="h-3.5 w-3.5" />
+                    {formatNumber(video.share_count || 0)}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    {formatNumber(video.comment_count || 0)}
+                  </div>
+                </div>
+
+                {/* Techniques - Improved Spacing and Style */}
+                {result?.openingLines?.techniques && result.openingLines.techniques.length > 0 && (
+                  <div className="space-y-3">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Techniques</span>
+                    <div className="flex flex-wrap gap-2">
+                      {result.openingLines.techniques.slice(0, 3).map((technique: string, index: number) => (
+                        <Badge
+                          key={index}
+                          variant="secondary"
+                          className="text-xs px-3 py-1 font-normal"
+                        >
+                          {technique}
+                        </Badge>
+                      ))}
+                      {result.openingLines.techniques.length > 3 && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs px-3 py-1 font-normal"
+                        >
+                          +{result.openingLines.techniques.length - 3} more
+                        </Badge>
+                      )}
                     </div>
                   </div>
+                )}
 
-                  {/* Progress Bars */}
-                  <div className="space-y-2">
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>Overall Score</span>
-                        <span className={getScoreColor(overallScore)}>{overallScore}%</span>
-                      </div>
-                      <Progress value={overallScore} className="h-2" />
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span>Hook Effectiveness</span>
-                        <span>{effectiveness * 10}%</span>
-                      </div>
-                      <Progress value={effectiveness * 10} className="h-2" />
-                    </div>
-                  </div>
+                {/* View Details Button - More Prominent */}
+                <Link href={`/admin/tiktok/analysis?video=${video.id}`}>
+                  <Button className="w-full" size="default">
+                    <Brain className="mr-2 h-4 w-4" />
+                    View Full Analysis
+                  </Button>
+                </Link>
 
-                  {/* Key Techniques */}
-                  {result?.openingLines?.techniques && result.openingLines.techniques.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Target className="h-4 w-4 text-blue-500" />
-                        <span className="text-sm font-medium">Techniques</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {result.openingLines.techniques.slice(0, 3).map((technique: string, index: number) => (
-                          <Badge key={index} variant="outline" className="text-xs">
-                            {technique}
-                          </Badge>
-                        ))}
-                        {result.openingLines.techniques.length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{result.openingLines.techniques.length - 3} more
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Search Term */}
-                  <div className="pt-2 border-t">
-                    <Badge variant="outline" className="text-xs">
-                      {video.search_terms.term}
-                    </Badge>
-                  </div>
-
-                  {/* View Details Button */}
-                  <Link href={`/admin/tiktok/analysis?video=${video.id}`}>
-                    <Button className="w-full" size="sm">
-                      <Brain className="mr-2 h-4 w-4" />
-                      View Full Analysis
-                    </Button>
-                  </Link>
-
-                  {/* Analysis Date */}
-                  <div className="text-xs text-muted-foreground text-center">
-                    Analyzed {formatDistanceToNow(new Date(analysis.processed_at), { addSuffix: true })}
-                  </div>
+                {/* Analysis Date - Subtle */}
+                <div className="text-xs text-muted-foreground text-center pt-2 border-t">
+                  Analyzed {formatDistanceToNow(new Date(analysis.processed_at), { addSuffix: true })}
                 </div>
               </CardContent>
             </Card>
@@ -290,8 +273,8 @@ export function HookAnalysisGrid({ searchTermId, searchQuery }: HookAnalysisGrid
 
       {/* Load More */}
       {hasNextPage && (
-        <div className="flex justify-center pt-6">
-          <Button onClick={() => fetchNextPage()} disabled={isLoading}>
+        <div className="flex justify-center pt-8">
+          <Button onClick={() => fetchNextPage()} disabled={isLoading} size="lg">
             Load More Analysis
           </Button>
         </div>
