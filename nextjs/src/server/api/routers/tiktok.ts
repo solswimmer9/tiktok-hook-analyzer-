@@ -89,12 +89,33 @@ export const tiktokRouter = createTRPCRouter({
       searchTermId: z.string().optional(),
       limit: z.number().min(1).max(100).default(20),
       offset: z.number().min(0).default(0),
+      cursor: z.object({
+        created_at: z.string(),
+        id: z.string()
+      }).optional(),
     }))
     .query(async ({ ctx, input }) => {
+      // Use selective field fetching - exclude heavy JSONB fields
       let query = ctx.supabase
         .from("tiktok_videos")
         .select(`
-          *,
+          id,
+          search_term_id,
+          video_id,
+          title,
+          creator,
+          creator_username,
+          view_count,
+          like_count,
+          share_count,
+          comment_count,
+          duration,
+          video_url,
+          r2_key,
+          r2_url,
+          thumbnail_url,
+          created_at,
+          updated_at,
           search_terms!inner (
             id,
             term,
@@ -102,16 +123,29 @@ export const tiktokRouter = createTRPCRouter({
           ),
           hook_analysis (
             id,
-            analysis_result,
             processed_at
           )
         `)
         .eq("search_terms.user_id", ctx.user.id)
         .order("created_at", { ascending: false })
-        .range(input.offset, input.offset + input.limit - 1);
+        .order("id", { ascending: false });
 
       if (input.searchTermId) {
         query = query.eq("search_term_id", input.searchTermId);
+      }
+
+      // Use cursor-based pagination if cursor is provided, otherwise fall back to offset
+      if (input.cursor) {
+        query = query.or(`created_at.lt.${input.cursor.created_at},and(created_at.eq.${input.cursor.created_at},id.lt.${input.cursor.id})`);
+      } else if (input.offset > 0) {
+        // Support legacy offset-based pagination
+        query = query.range(input.offset, input.offset + input.limit - 1);
+      } else {
+        query = query.limit(input.limit);
+      }
+
+      if (!input.offset && input.cursor) {
+        query = query.limit(input.limit);
       }
 
       const { data, error } = await query;
