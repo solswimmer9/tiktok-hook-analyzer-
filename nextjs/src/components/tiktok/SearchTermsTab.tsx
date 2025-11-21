@@ -6,10 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { trpc } from "@/utils/trpc";
 import { useState } from "react";
 import { toast } from "@/lib/utils";
-import { Plus, MoreHorizontal, Search, Archive, ArchiveRestore, Trash2, RotateCcw } from "lucide-react";
+import { Plus, MoreHorizontal, Search, Archive, ArchiveRestore, Trash2, RotateCcw, AlertTriangle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Database } from "@shared-types/database.types";
 
@@ -18,11 +19,20 @@ type SearchTerm = Database['public']['Tables']['search_terms']['Row'];
 export function SearchTermsTab() {
   const [newTerm, setNewTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [termToDelete, setTermToDelete] = useState<SearchTerm | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
   const utils = trpc.useUtils();
-  
+
   // Queries
   const { data: searchTerms, isLoading } = trpc.tiktok.getSearchTerms.useQuery();
+
+  // Get video count for the term being deleted
+  const { data: videosToDelete } = trpc.tiktok.getVideos.useQuery(
+    { searchTermId: termToDelete?.id, limit: 100, offset: 0 },
+    { enabled: !!termToDelete }
+  );
 
   // Mutations
   const createTerm = trpc.tiktok.createSearchTerm.useMutation({
@@ -42,7 +52,12 @@ export function SearchTermsTab() {
     onSuccess: () => {
       utils.tiktok.getSearchTerms.invalidate();
       utils.tiktok.getStatistics.invalidate();
-      toast.success("Search term deleted");
+      utils.tiktok.getVideos.invalidate();
+      utils.tiktok.getHookAnalysis.invalidate();
+      setDeleteDialogOpen(false);
+      setTermToDelete(null);
+      setDeleteConfirmation("");
+      toast.success("Search term and all associated data deleted successfully");
     },
     onError: (error) => {
       toast.error(error.message || "Failed to delete search term");
@@ -85,9 +100,15 @@ export function SearchTermsTab() {
     createTerm.mutate({ term: newTerm.trim() });
   };
 
-  const handleDeleteTerm = (id: string) => {
-    if (confirm("Are you sure you want to delete this search term? This will also delete all associated videos and analysis.")) {
-      deleteTerm.mutate({ id });
+  const handleDeleteTerm = (term: SearchTerm) => {
+    setTermToDelete(term);
+    setDeleteConfirmation("");
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (termToDelete && deleteConfirmation === termToDelete.term) {
+      deleteTerm.mutate({ id: termToDelete.id });
     }
   };
 
@@ -246,7 +267,7 @@ export function SearchTermsTab() {
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem
-                          onClick={() => handleDeleteTerm(term.id)}
+                          onClick={() => handleDeleteTerm(term)}
                           disabled={deleteTerm.isLoading}
                           className="text-destructive"
                         >
@@ -262,6 +283,71 @@ export function SearchTermsTab() {
           </Table>
         )}
       </CardContent>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Search Term
+            </DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. This will permanently delete the search term and all associated data.
+            </DialogDescription>
+          </DialogHeader>
+
+          {termToDelete && (
+            <div className="space-y-4">
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Warning:</strong> Deleting "{termToDelete.term}" will also delete:
+                  <ul className="list-disc list-inside mt-2 space-y-1">
+                    <li><strong>{videosToDelete?.length || 0}</strong> videos</li>
+                    <li>All associated hook analyses</li>
+                    <li>All engagement data</li>
+                  </ul>
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirm-delete">
+                  Type <strong>{termToDelete.term}</strong> to confirm:
+                </Label>
+                <Input
+                  id="confirm-delete"
+                  value={deleteConfirmation}
+                  onChange={(e) => setDeleteConfirmation(e.target.value)}
+                  placeholder={termToDelete.term}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setTermToDelete(null);
+                setDeleteConfirmation("");
+              }}
+              disabled={deleteTerm.isLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleteConfirmation !== termToDelete?.term || deleteTerm.isLoading}
+            >
+              {deleteTerm.isLoading ? "Deleting..." : "Delete Permanently"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
