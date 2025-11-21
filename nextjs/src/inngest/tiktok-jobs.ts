@@ -6,6 +6,8 @@ import { r2Client } from "@/lib/clients/r2";
 import { geminiClient, HookAnalysisResult } from "@/lib/clients/gemini";
 import { Database } from "@shared-types/database.types";
 
+import { logDebug } from "@/lib/debug-logger";
+
 // Search and process TikTok videos for a search term
 export const searchTikTokVideos = inngestClient.createFunction(
   {
@@ -18,14 +20,22 @@ export const searchTikTokVideos = inngestClient.createFunction(
     const { searchTermId, searchTerm, userId } = event.data;
 
     logger.info(`Starting TikTok video search for term: ${searchTerm}`);
+    logDebug(`Starting TikTok video search for term: ${searchTerm}`);
 
     // Step 1: Search TikTok videos
     const videos = await step.run("tiktok: search and filter videos", async () => {
-      const allVideos = await tiktokApi.searchVideosWithPagination(searchTerm, 10, 100);
-      const topVideos = tiktokApi.filterTopVideos(allVideos, 0.5); // Top 50%
+      try {
+        logDebug(`Inside step.run: searching videos for ${searchTerm}`);
+        const allVideos = await tiktokApi.searchVideosWithPagination(searchTerm, 10, 100);
+        const topVideos = tiktokApi.filterTopVideos(allVideos, 0.5); // Top 50%
 
-      logger.info(`Found ${allVideos.length} videos, filtered to top ${topVideos.length}`);
-      return topVideos;
+        logger.info(`Found ${allVideos.length} videos, filtered to top ${topVideos.length}`);
+        logDebug(`Found ${allVideos.length} videos, filtered to top ${topVideos.length}`);
+        return topVideos;
+      } catch (error) {
+        logDebug(`ERROR in search step: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
+      }
     });
 
     // Step 2: Save videos to database
@@ -91,6 +101,7 @@ export const searchTikTokVideos = inngestClient.createFunction(
 
       await Promise.all(downloadPromises);
       logger.info(`Queued ${downloadPromises.length} video downloads`);
+      logDebug(`Queued ${downloadPromises.length} video downloads`);
     });
 
     return {
@@ -111,6 +122,7 @@ export const downloadTikTokVideo = inngestClient.createFunction(
   },
   async ({ event, step, logger }) => {
     const { videoId, searchTermId, videoUrl, directDownloadUrl, videoMetadata } = event.data;
+    logDebug(`Starting download job for video: ${videoId}`);
 
     logger.info(`Starting download for video: ${videoId}`);
 
@@ -200,7 +212,7 @@ export const analyzeVideoHook = inngestClient.createFunction(
   {
     id: "tiktok/analyze-hook",
     concurrency: {
-      limit: 3, // Process max 3 videos concurrently to avoid rate limits
+      limit: 10, // Process max 10 videos concurrently to speed up analysis
     },
     retries: 3, // Retry failed jobs up to 3 times
   },
@@ -209,6 +221,8 @@ export const analyzeVideoHook = inngestClient.createFunction(
   },
   async ({ event, step, logger }) => {
     const { videoId, r2Key, r2Url } = event.data;
+    const startTime = Date.now();
+    logDebug(`Starting analysis job for video: ${videoId}`);
 
     logger.info(`Starting hook analysis for video: ${videoId}`);
 
@@ -279,6 +293,7 @@ export const analyzeVideoHook = inngestClient.createFunction(
       videoId,
       overallScore: analysis.overallScore,
       hookType: analysis.engagementTactics.hook_type,
+      processingTimeMs: Date.now() - startTime,
     };
   }
 );
