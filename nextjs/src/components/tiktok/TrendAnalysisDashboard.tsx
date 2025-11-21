@@ -110,7 +110,7 @@ export function TrendAnalysisDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {analysis?.commonPhrases && analysis.commonPhrases.length > 0 ? (
+                {analysis?.commonPhrases && Array.isArray(analysis.commonPhrases) && analysis.commonPhrases.length > 0 ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -167,7 +167,7 @@ export function TrendAnalysisDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {analysis?.visualThemes && analysis.visualThemes.length > 0 ? (
+                {analysis?.visualThemes && Array.isArray(analysis.visualThemes) && analysis.visualThemes.length > 0 ? (
                   <div className="grid gap-4">
                     {analysis.visualThemes.map((theme: any, index: number) => (
                       <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
@@ -207,7 +207,7 @@ export function TrendAnalysisDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {analysis?.engagementPatterns && analysis.engagementPatterns.length > 0 ? (
+                {analysis?.engagementPatterns && Array.isArray(analysis.engagementPatterns) && analysis.engagementPatterns.length > 0 ? (
                   <div className="space-y-4">
                     {analysis.engagementPatterns.map((pattern: any, index: number) => (
                       <Card key={index} className="p-4">
@@ -261,7 +261,7 @@ export function TrendAnalysisDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {analysis?.recommendations && analysis.recommendations.length > 0 ? (
+              {analysis?.recommendations && Array.isArray(analysis.recommendations) && analysis.recommendations.length > 0 ? (
                 <ul className="space-y-2">
                   {analysis.recommendations.map((rec: string, index: number) => (
                     <li key={index} className="text-sm flex items-start gap-2">

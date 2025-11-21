@@ -1,6 +1,8 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/utils/trpc";
-import { Brain, TrendingUp, TrendingDown, Lightbulb } from "lucide-react";
+import { Brain, TrendingUp, TrendingDown, Lightbulb, CheckCircle2, MessageCircle } from "lucide-react";
+import { ClusterStats } from "@/server/services/clustering";
 
 export function HookClusters({ searchTermId }: { searchTermId?: string }) {
     const { data: clusteringResult, isLoading, error } = trpc.tiktok.getHookClusters.useQuery({
@@ -172,7 +174,7 @@ function ClusterCard({ cluster, rank, totalClusters, totalAnalyzed }: {
                         Key Techniques
                     </span>
                     <div className="flex flex-wrap gap-1.5">
-                        {cluster.commonTechniques.slice(0, 4).map((t, i) => (
+                        {Array.isArray(cluster.commonTechniques) && cluster.commonTechniques.slice(0, 4).map((t, i) => (
                             <Badge key={i} variant="outline" className="text-xs font-normal bg-white">
                                 {t.technique}
                             </Badge>

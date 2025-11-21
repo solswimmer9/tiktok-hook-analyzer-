@@ -261,7 +261,7 @@ export function HookAnalysisDetail({ videoId }: HookAnalysisDetailProps) {
                   <p className="text-sm text-muted-foreground">{result.visualElements.opening_shot}</p>
                 </div>
 
-                {result.visualElements.visual_hooks && result.visualElements.visual_hooks.length > 0 && (
+                {result.visualElements.visual_hooks && Array.isArray(result.visualElements.visual_hooks) && result.visualElements.visual_hooks.length > 0 && (
                   <div>
                     <h4 className="font-semibold mb-2">Visual Hooks</h4>
                     <div className="flex flex-wrap gap-2">
@@ -274,7 +274,7 @@ export function HookAnalysisDetail({ videoId }: HookAnalysisDetailProps) {
                   </div>
                 )}
 
-                {result.visualElements.color_palette && result.visualElements.color_palette.length > 0 && (
+                {result.visualElements.color_palette && Array.isArray(result.visualElements.color_palette) && result.visualElements.color_palette.length > 0 && (
                   <div>
                     <h4 className="font-semibold mb-2">Color Palette</h4>
                     <div className="flex flex-wrap gap-2">
@@ -287,7 +287,7 @@ export function HookAnalysisDetail({ videoId }: HookAnalysisDetailProps) {
                   </div>
                 )}
 
-                {result.visualElements.text_overlays && result.visualElements.text_overlays.length > 0 && (
+                {result.visualElements.text_overlays && Array.isArray(result.visualElements.text_overlays) && result.visualElements.text_overlays.length > 0 && (
                   <div>
                     <h4 className="font-semibold mb-2">Text Overlays</h4>
                     <div className="space-y-1">
@@ -300,7 +300,7 @@ export function HookAnalysisDetail({ videoId }: HookAnalysisDetailProps) {
                   </div>
                 )}
 
-                {result.visualElements.transitions && result.visualElements.transitions.length > 0 && (
+                {result.visualElements.transitions && Array.isArray(result.visualElements.transitions) && result.visualElements.transitions.length > 0 && (
                   <div>
                     <h4 className="font-semibold mb-2">Transitions</h4>
                     <div className="flex flex-wrap gap-2">
@@ -349,7 +349,7 @@ export function HookAnalysisDetail({ videoId }: HookAnalysisDetailProps) {
               </div>
 
               <div className="space-y-4">
-                {result.engagementTactics.curiosity_gaps && result.engagementTactics.curiosity_gaps.length > 0 && (
+                {result.engagementTactics.curiosity_gaps && Array.isArray(result.engagementTactics.curiosity_gaps) && result.engagementTactics.curiosity_gaps.length > 0 && (
                   <div>
                     <h4 className="font-semibold mb-2">Curiosity Gaps</h4>
                     <ul className="space-y-1">
@@ -362,7 +362,7 @@ export function HookAnalysisDetail({ videoId }: HookAnalysisDetailProps) {
                   </div>
                 )}
 
-                {result.engagementTactics.social_proof && result.engagementTactics.social_proof.length > 0 && (
+                {result.engagementTactics.social_proof && Array.isArray(result.engagementTactics.social_proof) && result.engagementTactics.social_proof.length > 0 && (
                   <div>
                     <h4 className="font-semibold mb-2">Social Proof</h4>
                     <div className="flex flex-wrap gap-2">
@@ -375,7 +375,7 @@ export function HookAnalysisDetail({ videoId }: HookAnalysisDetailProps) {
                   </div>
                 )}
 
-                {result.engagementTactics.urgency_indicators && result.engagementTactics.urgency_indicators.length > 0 && (
+                {result.engagementTactics.urgency_indicators && Array.isArray(result.engagementTactics.urgency_indicators) && result.engagementTactics.urgency_indicators.length > 0 && (
                   <div>
                     <h4 className="font-semibold mb-2">Urgency Indicators</h4>
                     <div className="flex flex-wrap gap-2">
@@ -419,7 +419,7 @@ export function HookAnalysisDetail({ videoId }: HookAnalysisDetailProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {result?.recommendations && result.recommendations.length > 0 ? (
+            {result?.recommendations && Array.isArray(result.recommendations) && result.recommendations.length > 0 ? (
               <ul className="space-y-2">
                 {result.recommendations.map((rec: string, index: number) => (
                   <li key={index} className="text-sm flex items-start gap-2">
