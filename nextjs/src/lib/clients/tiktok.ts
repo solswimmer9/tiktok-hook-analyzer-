@@ -1,4 +1,5 @@
 import { env } from "process";
+import { logDebug } from "@/lib/debug-logger";
 
 export interface TikTokSearchResponse {
   code: number;
@@ -102,6 +103,7 @@ class TikTokAPI {
   private headers: Record<string, string>;
 
   constructor() {
+    console.log("DEBUG: TikTokAPI constructor called");
     const rapidApiKey = process.env.RAPID_API_KEY;
     if (!rapidApiKey) {
       throw new Error('RAPID_API_KEY environment variable is required');
@@ -129,6 +131,7 @@ class TikTokAPI {
 
     const url = `${this.baseURL}/feed/search?${params}`;
     console.log(`Making TikTok API request to: ${url}`);
+    logDebug(`Making TikTok API request to: ${url}`);
     console.log('Request headers:', this.headers);
 
     const response = await fetch(url, {
@@ -234,6 +237,7 @@ class TikTokAPI {
     let page = 0;
 
     console.log(`Starting TikTok search for "${keyword}" with max pages: ${maxPages}, target count: ${targetVideoCount}`);
+    logDebug(`Starting TikTok search for "${keyword}" with max pages: ${maxPages}, target count: ${targetVideoCount}`);
 
     while (page < maxPages && allVideos.length < targetVideoCount) {
       try {
