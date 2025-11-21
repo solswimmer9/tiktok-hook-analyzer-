@@ -42,10 +42,10 @@ export class VideoProcessor {
       const { stdout } = await execAsync(
         `ffprobe -v quiet -print_format json -show_format -show_streams "${videoPath}"`
       );
-      
+
       const info = JSON.parse(stdout);
       const videoStream = info.streams.find((s: any) => s.codec_type === 'video');
-      
+
       return {
         duration: parseFloat(info.format.duration),
         size: parseInt(info.format.size),
@@ -61,7 +61,7 @@ export class VideoProcessor {
     try {
       const videoInfo = await this.getVideoInfo(inputPath);
       const trimDuration = videoInfo.duration * durationRatio;
-      
+
       // Trim from the beginning (first half) since we focus on hooks
       await execAsync(
         `ffmpeg -i "${inputPath}" -t ${trimDuration} -c copy -avoid_negative_ts make_zero "${outputPath}"`
@@ -76,48 +76,66 @@ export class VideoProcessor {
     const originalInfo = await this.getVideoInfo(videoPath);
     let currentPath = videoPath;
     let trimmed = false;
-    
-    // If video is larger than 20MB, keep trimming until it's under the limit
+
+    // If video is larger than 20MB, calculate exact duration needed
     if (originalInfo.size > this.MAX_SIZE_BYTES) {
       const tempId = crypto.randomUUID();
-      let trimRatio = 0.5;
-      
-      while (true) {
-        const trimmedPath = join(tmpdir(), `trimmed_${tempId}_${trimRatio}.mp4`);
-        
-        try {
-          await this.trimVideo(currentPath, trimmedPath, trimRatio);
-          const trimmedInfo = await this.getVideoInfo(trimmedPath);
-          
-          // Clean up previous temp file if it's not the original
-          if (currentPath !== videoPath) {
-            await unlink(currentPath).catch(() => {});
-          }
-          
-          currentPath = trimmedPath;
-          trimmed = true;
-          
-          // If under size limit, we're done
-          if (trimmedInfo.size <= this.MAX_SIZE_BYTES) {
-            break;
-          }
-          
-          // If still too large, trim further (half of current length)
-          trimRatio = 0.5;
-        } catch (error) {
-          console.error('Error in trim iteration:', error);
-          break;
+
+      // Calculate target duration with 10% buffer to be safe
+      // target = current * (max_size / current_size) * 0.9
+      const compressionRatio = this.MAX_SIZE_BYTES / originalInfo.size;
+      const targetDuration = originalInfo.duration * compressionRatio * 0.9;
+
+      console.log(`Video too large (${this.formatFileSize(originalInfo.size)}). Trimming to ~${targetDuration.toFixed(2)}s`);
+
+      const trimmedPath = join(tmpdir(), `trimmed_${tempId}.mp4`);
+
+      try {
+        // Trim to calculated duration in one pass
+        // We use the calculated ratio directly instead of a fixed 0.5
+        await execAsync(
+          `ffmpeg -i "${currentPath}" -t ${targetDuration} -c copy -avoid_negative_ts make_zero "${trimmedPath}"`
+        );
+
+        const trimmedInfo = await this.getVideoInfo(trimmedPath);
+
+        // Clean up previous temp file if it's not the original
+        if (currentPath !== videoPath) {
+          await unlink(currentPath).catch(() => { });
         }
+
+        currentPath = trimmedPath;
+        trimmed = true;
+
+        // Verify size (should be under limit due to buffer)
+        if (trimmedInfo.size > this.MAX_SIZE_BYTES) {
+          console.warn(`Trimmed video still too large (${this.formatFileSize(trimmedInfo.size)}). Forcing hard limit.`);
+          // Fallback: If somehow still too large (unlikely with 10% buffer), do a hard cut to 15MB size equivalent
+          // This is a safety net
+          const emergencyPath = join(tmpdir(), `emergency_${tempId}.mp4`);
+          const emergencyDuration = targetDuration * 0.8;
+
+          await execAsync(
+            `ffmpeg -i "${currentPath}" -t ${emergencyDuration} -c copy -avoid_negative_ts make_zero "${emergencyPath}"`
+          );
+
+          await unlink(currentPath).catch(() => { });
+          currentPath = emergencyPath;
+        }
+
+      } catch (error) {
+        console.error('Error in smart trim:', error);
+        throw new Error('Failed to trim video to size');
       }
     }
 
     // Convert to base64
     const videoBuffer = await readFile(currentPath);
     const base64 = videoBuffer.toString('base64');
-    
+
     // Get final size
     const finalInfo = await this.getVideoInfo(currentPath);
-    
+
     return {
       originalSize: originalInfo.size,
       processedSize: finalInfo.size,
@@ -137,15 +155,15 @@ export class VideoProcessor {
 
   async downloadAndProcessVideo(videoUrl: string): Promise<VideoProcessingResult> {
     const downloadedPath = await this.downloadVideo(videoUrl);
-    
+
     try {
       const result = await this.processVideoForGemini(downloadedPath);
-      
+
       // Clean up original download if it's different from processed file
       if (result.tempFilePath !== downloadedPath) {
         await this.cleanup(downloadedPath);
       }
-      
+
       return result;
     } catch (error) {
       // Clean up on error
