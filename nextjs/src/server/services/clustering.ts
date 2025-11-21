@@ -41,9 +41,9 @@ export class ClusteringService {
     /**
      * Fetch all hook analyses and perform K-Means clustering
      */
-    async performClustering(userId: string, k?: number): Promise<ClusteringResult> {
+    async performClustering(userId: string, k?: number, searchTermId?: string): Promise<ClusteringResult> {
         // 1. Fetch all hook analyses for the user
-        const { data: analyses, error } = await this.supabase
+        let query = this.supabase
             .from("hook_analysis")
             .select(`
         *,
@@ -53,6 +53,7 @@ export class ClusteringService {
           like_count,
           share_count,
           comment_count,
+          search_term_id,
           search_terms!inner (
             user_id
           )
@@ -61,9 +62,17 @@ export class ClusteringService {
             .eq("tiktok_videos.search_terms.user_id", userId)
             .not("analysis_result", "is", null);
 
+        // Filter by search term if provided
+        if (searchTermId) {
+            query = query.eq("tiktok_videos.search_term_id", searchTermId);
+        }
+
+        const { data: analyses, error } = await query;
+
         if (error) throw error;
+        const termMsg = searchTermId ? " for this search term" : "";
         if (!analyses || analyses.length < 5) {
-            throw new Error("Not enough data to perform clustering (minimum 5 analyses required)");
+            throw new Error(`Not enough data to perform clustering${termMsg} (minimum 5 analyses required)`);
         }
 
         // 2. Extract features

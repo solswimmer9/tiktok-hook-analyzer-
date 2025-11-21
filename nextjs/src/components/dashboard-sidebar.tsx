@@ -19,7 +19,15 @@ import {
 } from "@/components/ui/sidebar";
 import { appConfig } from "@/config/app";
 import { useUser } from "@/hooks/useUser";
-import { ChevronUp } from "lucide-react";
+import {
+  ChevronUp,
+  Search,
+  Video,
+  Brain,
+  TrendingUp,
+  Settings,
+  LayoutDashboard
+} from "lucide-react";
 import { useRouter } from "next/router";
 import {
   DropdownMenu,
@@ -29,6 +37,15 @@ import {
 } from "./ui/dropdown-menu";
 
 const items = appConfig.dashboard.navigation;
+
+const iconMap: Record<string, any> = {
+  Search,
+  Video,
+  Brain,
+  TrendingUp,
+  Settings,
+  LayoutDashboard
+};
 
 export default function DashboardSidebar() {
   const { user, signOut } = useUser();
@@ -45,7 +62,7 @@ export default function DashboardSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <p
-              onClick={() => router.push("/admin")}
+              onClick={() => router.push("/dashboard")}
               className="text-foreground-muted cursor-pointer px-2 pt-2 text-2xl font-bold"
             >
               {appConfig.brand.name}
@@ -58,42 +75,52 @@ export default function DashboardSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  {'subItems' in item ? (
-                    <Collapsible
-                      defaultOpen
-                      className="group/collapsible w-full"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton className="px-4 py-3">
+              {items.map((item) => {
+                const Icon = (item as any).icon ? iconMap[(item as any).icon] : null;
+
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    {'subItems' in item ? (
+                      <Collapsible
+                        defaultOpen
+                        className="group/collapsible w-full"
+                      >
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton className="px-4 py-3">
+                            {Icon && <Icon className="mr-2 h-4 w-4" />}
+                            <span>{item.title}</span>
+                            <ChevronUp className="ml-auto h-6 w-6 transition-transform group-data-[state=closed]/collapsible:rotate-180" />
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <SidebarMenuSub>
+                            {item.subItems.map((subItem) => {
+                              const SubIcon = (subItem as any).icon ? iconMap[(subItem as any).icon] : null;
+                              return (
+                                <SidebarMenuSubItem key={subItem.title}>
+                                  <SidebarMenuSubButton asChild>
+                                    <a href={subItem.url} className="px-6 py-3 flex items-center">
+                                      {SubIcon && <SubIcon className="mr-2 h-4 w-4" />}
+                                      {subItem.title}
+                                    </a>
+                                  </SidebarMenuSubButton>
+                                </SidebarMenuSubItem>
+                              );
+                            })}
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    ) : 'url' in item ? (
+                      <SidebarMenuButton asChild>
+                        <a href={item.url} className="px-4 py-3">
+                          {Icon && <Icon className="mr-2 h-4 w-4" />}
                           <span>{item.title}</span>
-                          <ChevronUp className="ml-auto h-6 w-6 transition-transform group-data-[state=closed]/collapsible:rotate-180" />
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {item.subItems.map((subItem) => (
-                            <SidebarMenuSubItem key={subItem.title}>
-                              <SidebarMenuSubButton asChild>
-                                <a href={subItem.url} className="px-6 py-3">
-                                  {subItem.title}
-                                </a>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ))}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  ) : 'url' in item ? (
-                    <SidebarMenuButton asChild>
-                      <a href={item.url} className="px-4 py-3">
-                        <span>{item.title}</span>
-                      </a>
-                    </SidebarMenuButton>
-                  ) : null}
-                </SidebarMenuItem>
-              ))}
+                        </a>
+                      </SidebarMenuButton>
+                    ) : null}
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

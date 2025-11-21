@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/utils/trpc";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Brain,
   VideoIcon,
@@ -32,18 +32,48 @@ interface HookAnalysisGridProps {
 }
 
 export function HookAnalysisGrid({ searchTermId, searchQuery }: HookAnalysisGridProps) {
-  const [page, setPage] = useState(0);
+  const [allLoadedAnalyses, setAllLoadedAnalyses] = useState<HookAnalysis[]>([]);
+  const [offset, setOffset] = useState(0);
   const pageSize = 12;
 
+  // Reset pagination when filters change
+  useEffect(() => {
+    setOffset(0);
+    setAllLoadedAnalyses([]);
+  }, [searchTermId]);
+
   // Fetch hook analyses with pagination
-  const { data: analyses, isLoading } = trpc.tiktok.getHookAnalysis.useQuery({
+  const { data: analyses, isLoading, isFetching } = trpc.tiktok.getHookAnalysis.useQuery({
     searchTermId,
     limit: pageSize,
+    offset: offset,
   });
 
-  const allAnalyses = (analyses || []) as HookAnalysis[];
-  const hasNextPage = false; // Simplified for now
-  const fetchNextPage = () => { };
+  // Accumulate analyses when new data arrives
+  useEffect(() => {
+    if (analyses && analyses.length > 0) {
+      setAllLoadedAnalyses(prev => {
+        // If offset is 0, replace all analyses (fresh load)
+        if (offset === 0) {
+          return analyses as HookAnalysis[];
+        }
+        // Otherwise, append new analyses
+        const analysisList = analyses as HookAnalysis[];
+        const existingIds = new Set(prev.map(a => a.id));
+        const newAnalyses = analysisList.filter(a => !existingIds.has(a.id));
+        return [...prev, ...newAnalyses] as HookAnalysis[];
+      });
+    }
+  }, [analyses, offset]);
+
+  const hasNextPage = analyses && analyses.length === pageSize;
+  const fetchNextPage = () => {
+    if (!isFetching && hasNextPage) {
+      setOffset(prev => prev + pageSize);
+    }
+  };
+
+  const allAnalyses = allLoadedAnalyses;
 
   // Filter analyses by search query
   const filteredAnalyses = searchQuery
@@ -80,7 +110,7 @@ export function HookAnalysisGrid({ searchTermId, searchQuery }: HookAnalysisGrid
     return "destructive";
   };
 
-  if (isLoading) {
+  if (isLoading && allLoadedAnalyses.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -120,7 +150,7 @@ export function HookAnalysisGrid({ searchTermId, searchQuery }: HookAnalysisGrid
               }
             </p>
             {!searchQuery && !searchTermId && (
-              <Link href="/admin/tiktok/videos">
+              <Link href="/dashboard/tiktok/videos">
                 <Button>View Videos</Button>
               </Link>
             )}
@@ -258,7 +288,7 @@ export function HookAnalysisGrid({ searchTermId, searchQuery }: HookAnalysisGrid
                 )}
 
                 {/* View Details Button - More Prominent */}
-                <Link href={`/admin/tiktok/analysis?video=${video.id}`}>
+                <Link href={`/dashboard/tiktok/analysis?video=${video.id}`}>
                   <Button className="w-full" size="default">
                     <Brain className="mr-2 h-4 w-4" />
                     View Full Analysis
@@ -276,10 +306,10 @@ export function HookAnalysisGrid({ searchTermId, searchQuery }: HookAnalysisGrid
       </div>
 
       {/* Load More */}
-      {hasNextPage && (
+      {hasNextPage && !isFetching && (
         <div className="flex justify-center pt-8">
-          <Button onClick={() => fetchNextPage()} disabled={isLoading} size="lg">
-            Load More Analysis
+          <Button onClick={() => fetchNextPage()} disabled={isFetching} size="lg">
+            {isFetching ? "Loading..." : "Load More Analysis"}
           </Button>
         </div>
       )}

@@ -29,21 +29,22 @@ export const appConfig = {
 
   // Dashboard configuration
   dashboard: {
-    defaultRoute: "/admin/tiktok",
+    defaultRoute: "/dashboard/tiktok",
     showSettings: true,
     navigation: [
       {
         title: "TikTok Analysis",
         subItems: [
-          { title: "Search Terms", url: "/admin/tiktok" },
-          { title: "Videos", url: "/admin/tiktok/videos" },
-          { title: "Hook Analysis", url: "/admin/tiktok/analysis" },
-          { title: "Trends", url: "/admin/tiktok/trends" },
+          { title: "Search", url: "/dashboard/tiktok", icon: "Search" },
+          { title: "Videos", url: "/dashboard/tiktok/videos", icon: "Video" },
+          { title: "Hook Analysis", url: "/dashboard/tiktok/analysis", icon: "Brain" },
+          { title: "Trends", url: "/dashboard/tiktok/trends", icon: "TrendingUp" },
         ],
       },
       {
         title: "Settings",
-        url: "/admin/settings",
+        url: "/dashboard/settings",
+        icon: "Settings",
       },
     ],
   },

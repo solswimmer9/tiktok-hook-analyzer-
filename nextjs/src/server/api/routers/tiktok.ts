@@ -425,9 +425,12 @@ export const tiktokRouter = createTRPCRouter({
 
   // Clustering
   getHookClusters: protectedProcedure
-    .input(z.object({ k: z.number().optional() }))
+    .input(z.object({
+      k: z.number().optional(),
+      searchTermId: z.string().optional()
+    }))
     .query(async ({ ctx, input }) => {
       const clusteringService = new ClusteringService(ctx.supabase as any);
-      return await clusteringService.performClustering(ctx.user.id, input.k);
+      return await clusteringService.performClustering(ctx.user.id, input.k, input.searchTermId);
     }),
 });

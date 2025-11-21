@@ -170,7 +170,7 @@ export function VideoGallery({ searchTermId, searchQuery }: VideoGalleryProps) {
               }
             </p>
             {!searchQuery && !searchTermId && (
-              <Link href="/admin/tiktok">
+              <Link href="/dashboard/tiktok">
                 <Button>Add Search Term</Button>
               </Link>
             )}
@@ -283,7 +283,7 @@ export function VideoGallery({ searchTermId, searchQuery }: VideoGalleryProps) {
                 <div className="flex items-center justify-between pt-2">
                   <div className="flex gap-2">
                     {video.hook_analysis && video.hook_analysis.length > 0 && (
-                      <Link href={`/admin/tiktok/analysis?video=${video.id}`}>
+                      <Link href={`/dashboard/tiktok/analysis?video=${video.id}`}>
                         <Button size="sm" variant="outline">
                           <Brain className="mr-1 h-3 w-3" />
                           View Analysis

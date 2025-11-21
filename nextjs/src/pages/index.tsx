@@ -74,43 +74,12 @@ export default function LandingPage() {
               <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 via-transparent to-transparent opacity-50" />
               <div className="p-2 md:p-4">
                 <div className="overflow-hidden rounded-lg border border-border bg-background shadow-sm">
-                  <div className="relative h-[400px] md:h-[500px] bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-                    {/* Floating Card UI */}
-                    <div className="absolute top-8 left-8 w-72 rounded-lg border border-border bg-background/95 p-4 shadow-xl backdrop-blur animate-in fade-in slide-in-from-bottom-4 duration-1000 hidden md:block">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 dark:bg-blue-900/30">
-                          <Brain className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <div className="text-sm font-semibold">Hook Strength</div>
-                          <div className="text-xs text-muted-foreground">AI Analysis</div>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
-                          <div className="h-full w-[92%] bg-primary rounded-full" />
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="font-medium">Excellent</span>
-                          <span className="text-muted-foreground">92/100</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Stats Card */}
-                    <div className="absolute bottom-8 right-8 w-64 rounded-lg border border-border bg-background/95 p-4 shadow-xl backdrop-blur animate-in fade-in slide-in-from-top-4 duration-1000 delay-300 hidden md:block">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <div className="text-2xl font-bold text-primary">1.2M</div>
-                          <div className="text-xs text-muted-foreground">Videos Analyzed</div>
-                        </div>
-                        <div>
-                          <div className="text-2xl font-bold text-green-600">94%</div>
-                          <div className="text-xs text-muted-foreground">Accuracy</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <img
+                    src="/dashboard-preview.png"
+                    alt="Dashboard Preview"
+                    className="h-auto w-full object-cover opacity-90"
+                    style={{ aspectRatio: '16/9', background: 'linear-gradient(to bottom right, #f3f4f6, #e5e7eb)' }}
+                  />
                 </div>
               </div>
             </div>

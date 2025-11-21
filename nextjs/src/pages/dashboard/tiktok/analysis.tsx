@@ -30,7 +30,7 @@ export default function TikTokAnalysis() {
           <div className="flex items-center gap-4">
             <Button
               variant="outline"
-              onClick={() => router.push("/admin/tiktok/analysis")}
+              onClick={() => router.push("/dashboard/tiktok/analysis")}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Analysis
@@ -118,7 +118,9 @@ export default function TikTokAnalysis() {
         </Card>
 
         {/* Hook Clusters */}
-        <HookClusters />
+        <HookClusters
+          searchTermId={selectedSearchTerm !== "all" ? selectedSearchTerm : undefined}
+        />
 
         {/* Analysis Grid */}
         <HookAnalysisGrid
