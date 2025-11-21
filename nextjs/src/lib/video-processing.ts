@@ -4,6 +4,7 @@ import { readFile, writeFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import crypto from 'crypto';
+import { logDebug } from './debug-logger';
 
 const execAsync = promisify(exec);
 
@@ -154,10 +155,14 @@ export class VideoProcessor {
   }
 
   async downloadAndProcessVideo(videoUrl: string): Promise<VideoProcessingResult> {
+    logDebug(`[VideoProcessor] Starting download from: ${videoUrl.substring(0, 100)}...`);
+
     const downloadedPath = await this.downloadVideo(videoUrl);
+    logDebug(`[VideoProcessor] Downloaded to: ${downloadedPath}`);
 
     try {
       const result = await this.processVideoForGemini(downloadedPath);
+      logDebug(`[VideoProcessor] Processed video: ${this.formatFileSize(result.processedSize)}, trimmed=${result.trimmed}`);
 
       // Clean up original download if it's different from processed file
       if (result.tempFilePath !== downloadedPath) {
@@ -166,6 +171,7 @@ export class VideoProcessor {
 
       return result;
     } catch (error) {
+      logDebug(`[VideoProcessor] ERROR: ${error instanceof Error ? error.message : String(error)}`);
       // Clean up on error
       await this.cleanup(downloadedPath);
       throw error;

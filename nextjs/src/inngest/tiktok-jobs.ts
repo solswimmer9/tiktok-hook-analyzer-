@@ -112,98 +112,146 @@ export const searchTikTokVideos = inngestClient.createFunction(
   }
 );
 
-// Download and store TikTok video
 export const downloadTikTokVideo = inngestClient.createFunction(
   {
     id: "tiktok/download-video",
+    retries: 3, // Retry failed downloads up to 3 times
   },
   {
     event: "tiktok/download-video",
   },
   async ({ event, step, logger }) => {
-    const { videoId, searchTermId, videoUrl, directDownloadUrl, videoMetadata } = event.data;
-    logDebug(`Starting download job for video: ${videoId}`);
+    try {
+      const { videoId, searchTermId, videoUrl, directDownloadUrl, videoMetadata } = event.data;
+      logDebug(`Starting download job for video: ${videoId}`);
 
-    logger.info(`Starting download for video: ${videoId}`);
+      logger.info(`Starting download for video: ${videoId}`);
 
-    // Step 1: Get download URL (either from direct URL or fetch from API)
-    const downloadUrl = await step.run("tiktok: get download url", async () => {
-      if (directDownloadUrl) {
-        logger.info(`Using direct download URL from search results`);
-        return directDownloadUrl;
-      }
+      // Step 1: Get download URL (either from direct URL or fetch from API)
+      const downloadUrl = await step.run("tiktok: get download url", async () => {
+        try {
+          if (directDownloadUrl) {
+            logger.info(`Using direct download URL from search results`);
+            logDebug(`[${videoId}] Using direct URL: ${directDownloadUrl.substring(0, 100)}...`);
+            return directDownloadUrl;
+          }
 
-      // Fallback: Fetch download URL from TikTok API using video_url
-      logger.info(`No direct URL available, fetching from TikTok API for: ${videoUrl}`);
-      try {
-        const downloadInfo = await tiktokApi.downloadVideo(videoUrl);
-        const url = downloadInfo.play || downloadInfo.play_watermark;
+          // Fallback: Fetch download URL from TikTok API using video_url
+          logger.info(`No direct URL available, fetching from TikTok API for: ${videoUrl}`);
+          logDebug(`[${videoId}] Fetching download URL from API for: ${videoUrl}`);
 
-        if (!url) {
-          throw new Error('No download URL returned from TikTok API');
+          const downloadInfo = await tiktokApi.downloadVideo(videoUrl);
+          const url = downloadInfo.play || downloadInfo.play_watermark;
+
+          if (!url) {
+            throw new Error('No download URL returned from TikTok API');
+          }
+
+          logger.info(`Successfully got download URL from API`);
+          logDebug(`[${videoId}] Got download URL from API: ${url.substring(0, 100)}...`);
+          return url;
+        } catch (error) {
+          logger.error(`Failed to get download URL from API: ${error}`);
+          logDebug(`[${videoId}] ERROR getting download URL: ${error instanceof Error ? error.message : String(error)}`);
+          throw new Error(`Failed to get download URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
+      });
 
-        logger.info(`Successfully got download URL from API`);
-        return url;
-      } catch (error) {
-        logger.error(`Failed to get download URL from API: ${error}`);
-        throw new Error(`Failed to get download URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    });
+      // Step 2: Download, process, and upload video
+      const uploadResult = await step.run("video: download, process, and upload", async () => {
+        try {
+          logDebug(`[${videoId}] Starting video download from: ${downloadUrl.substring(0, 100)}...`);
 
-    // Step 2: Download, process, and upload video
-    const uploadResult = await step.run("video: download, process, and upload", async () => {
-      // Download and process video
-      const processedVideo = await videoProcessor.downloadAndProcessVideo(downloadUrl);
-      logger.info(`Video processed: ${videoProcessor.formatFileSize(processedVideo.originalSize)} -> ${videoProcessor.formatFileSize(processedVideo.processedSize)}`);
+          // Download and process video
+          const processedVideo = await videoProcessor.downloadAndProcessVideo(downloadUrl);
+          logger.info(`Video processed: ${videoProcessor.formatFileSize(processedVideo.originalSize)} -> ${videoProcessor.formatFileSize(processedVideo.processedSize)}`);
+          logDebug(`[${videoId}] Video processed: original=${videoProcessor.formatFileSize(processedVideo.originalSize)}, processed=${videoProcessor.formatFileSize(processedVideo.processedSize)}, trimmed=${processedVideo.trimmed}`);
 
-      // Upload to R2
-      const fileName = `${videoMetadata.creatorUsername}_${videoId}.mp4`;
-      const result = await r2Client.uploadFile(processedVideo.tempFilePath, fileName);
-      logger.info(`Video uploaded to R2: ${result.key}`);
+          // Upload to R2
+          const fileName = `${videoMetadata.creatorUsername}_${videoId}.mp4`;
+          logDebug(`[${videoId}] Uploading to storage: ${fileName}`);
 
-      // Clean up temp file immediately after upload
-      await videoProcessor.cleanup(processedVideo.tempFilePath);
+          const result = await r2Client.uploadFile(processedVideo.tempFilePath, fileName);
+          logger.info(`Video uploaded to R2: ${result.key}`);
+          logDebug(`[${videoId}] Upload completed: key=${result.key}, size=${videoProcessor.formatFileSize(result.size)}`);
+
+          // Clean up temp file immediately after upload
+          await videoProcessor.cleanup(processedVideo.tempFilePath);
+          logDebug(`[${videoId}] Cleaned up temp file`);
+
+          return {
+            ...result,
+            trimmed: processedVideo.trimmed,
+            originalSize: processedVideo.originalSize,
+            processedSize: processedVideo.processedSize
+          };
+        } catch (error) {
+          logDebug(`[${videoId}] ERROR in download/process/upload: ${error instanceof Error ? error.message : String(error)}`);
+          logger.error(`Failed to download/process/upload video: ${error}`);
+          throw error;
+        }
+      });
+
+      // Step 3: Update database with R2 info
+      await step.run("db: update video with r2 info", async () => {
+        try {
+          logDebug(`[${videoId}] Updating database with R2 info`);
+
+          const { error } = await supabaseServer
+            .from("tiktok_videos")
+            .update({
+              r2_key: uploadResult.key,
+              r2_url: uploadResult.publicUrl,
+            })
+            .eq("id", videoId);
+
+          if (error) {
+            logDebug(`[${videoId}] Database update error: ${error.message}`);
+            throw error;
+          }
+
+          logDebug(`[${videoId}] Database updated successfully`);
+        } catch (error) {
+          logDebug(`[${videoId}] ERROR updating database: ${error instanceof Error ? error.message : String(error)}`);
+          throw error;
+        }
+      });
+
+      // Step 4: Queue hook analysis
+      await step.run("inngest: queue hook analysis", async () => {
+        try {
+          logDebug(`[${videoId}] Queueing analysis job`);
+
+          await inngestClient.send({
+            name: "tiktok/analyze-hook",
+            data: {
+              videoId,
+              r2Key: uploadResult.key,
+              r2Url: uploadResult.publicUrl,
+            },
+          });
+
+          logDebug(`[${videoId}] Analysis job queued successfully`);
+        } catch (error) {
+          logDebug(`[${videoId}] ERROR queueing analysis: ${error instanceof Error ? error.message : String(error)}`);
+          throw error;
+        }
+      });
+
+      logDebug(`COMPLETED download job for video: ${videoId}`);
 
       return {
-        ...result,
-        trimmed: processedVideo.trimmed,
-        originalSize: processedVideo.originalSize,
-        processedSize: processedVideo.processedSize
+        videoId,
+        r2Key: uploadResult.key,
+        fileSize: uploadResult.size,
+        trimmed: uploadResult.trimmed,
       };
-    });
-
-    // Step 3: Update database with R2 info
-    await step.run("db: update video with r2 info", async () => {
-      const { error } = await supabaseServer
-        .from("tiktok_videos")
-        .update({
-          r2_key: uploadResult.key,
-          r2_url: uploadResult.publicUrl,
-        })
-        .eq("id", videoId);
-
-      if (error) throw error;
-    });
-
-    // Step 4: Queue hook analysis
-    await step.run("inngest: queue hook analysis", async () => {
-      await inngestClient.send({
-        name: "tiktok/analyze-hook",
-        data: {
-          videoId,
-          r2Key: uploadResult.key,
-          r2Url: uploadResult.publicUrl,
-        },
-      });
-    });
-
-    return {
-      videoId,
-      r2Key: uploadResult.key,
-      fileSize: uploadResult.size,
-      trimmed: uploadResult.trimmed,
-    };
+    } catch (error) {
+      const videoId = event.data.videoId;
+      logDebug(`FAILED download job for video ${videoId}: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`Download job failed for video ${videoId}: ${error}`);
+      throw error; // Re-throw for Inngest retry logic
+    }
   }
 );
 

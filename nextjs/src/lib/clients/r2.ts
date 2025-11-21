@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFile } from 'fs/promises';
 import crypto from 'crypto';
+import { logDebug } from '../debug-logger';
 
 export interface R2UploadResult {
   key: string;
@@ -40,7 +41,11 @@ class SupabaseStorageClient {
 
   async uploadFile(filePath: string, originalName: string): Promise<R2UploadResult> {
     const key = this.generateKey(originalName);
+    logDebug(`[R2Client] Reading file: ${filePath}`);
+
     const fileBuffer = await readFile(filePath);
+    const fileSizeMB = (fileBuffer.length / 1024 / 1024).toFixed(2);
+    logDebug(`[R2Client] Uploading ${fileSizeMB}MB to bucket=${this.bucketName}, key=${key}`);
 
     try {
       const { data, error } = await this.supabase.storage
@@ -51,11 +56,13 @@ class SupabaseStorageClient {
         });
 
       if (error) {
+        logDebug(`[R2Client] Upload error: ${error.message}`);
         console.error('Error uploading to Supabase Storage:', error);
         throw error;
       }
 
       const publicUrl = this.getPublicUrl(key);
+      logDebug(`[R2Client] Upload successful: ${publicUrl}`);
 
       return {
         key,
@@ -64,6 +71,7 @@ class SupabaseStorageClient {
         size: fileBuffer.length,
       };
     } catch (error) {
+      logDebug(`[R2Client] Upload failed: ${error instanceof Error ? error.message : String(error)}`);
       console.error('Error uploading to Supabase Storage:', error);
       throw new Error('Failed to upload video to Supabase Storage');
     }
