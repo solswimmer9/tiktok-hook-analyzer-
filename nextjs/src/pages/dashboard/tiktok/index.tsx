@@ -6,6 +6,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/utils/trpc";
 import { TrendingUp, VideoIcon, Search, BarChart3 } from "lucide-react";
 
+// Helper function to format hook type names
+function formatHookType(hookType: string): string {
+  return hookType
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 export default function TikTokDashboard() {
   const { data: stats, isLoading: statsLoading } = trpc.tiktok.getStatistics.useQuery();
 
@@ -73,10 +81,10 @@ export default function TikTokDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {statsLoading 
-                  ? "..." 
-                  : Object.entries(stats?.topHookTypes || {})
-                      .sort(([,a], [,b]) => b - a)[0]?.[0] || "None"
+                {statsLoading
+                  ? "..."
+                  : formatHookType(Object.entries(stats?.topHookTypes || {})
+                      .sort(([,a], [,b]) => b - a)[0]?.[0] || "None")
                 }
               </div>
               <p className="text-xs text-muted-foreground">
