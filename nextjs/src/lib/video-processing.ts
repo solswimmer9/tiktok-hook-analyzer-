@@ -25,12 +25,26 @@ export class VideoProcessor {
     const tempPath = join(tmpdir(), `tiktok_${tempId}.mp4`);
 
     try {
-      // Download video using curl
-      await execAsync(`curl -o "${tempPath}" "${videoUrl}"`);
+      // Download video using curl with better error handling
+      // -f: fail silently on HTTP errors
+      // -L: follow redirects
+      // -A: set user-agent
+      // --max-time: timeout after 60 seconds
+      const { stdout, stderr } = await execAsync(
+        `curl -f -L -A "Mozilla/5.0" --max-time 60 -o "${tempPath}" "${videoUrl}"`
+      );
+
+      logDebug(`[VideoProcessor] curl stdout: ${stdout}`);
+      if (stderr) {
+        logDebug(`[VideoProcessor] curl stderr: ${stderr}`);
+      }
+
       return tempPath;
     } catch (error) {
-      console.error('Error downloading video:', error);
-      throw new Error('Failed to download video');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logDebug(`[VideoProcessor] curl failed: ${errorMessage}`);
+      console.error('Error downloading video:', errorMessage);
+      throw new Error(`Failed to download video: ${errorMessage}`);
     }
   }
 
