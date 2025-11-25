@@ -71,6 +71,29 @@ export interface ClusteringResult {
     totalAnalyzed: number;
 }
 
+export type PerformanceTier = 'top' | 'middle' | 'low';
+
+export interface SegmentedClusteringResult {
+    topTier: ClusteringResult;
+    middleTier: ClusteringResult;
+    lowTier: ClusteringResult;
+    thresholds: {
+        topPercentile: number;
+        lowPercentile: number;
+        topViewCount: number;
+        lowViewCount: number;
+    };
+    overallStats: {
+        totalAnalyzed: number;
+        topCount: number;
+        middleCount: number;
+        lowCount: number;
+        avgTopViews: number;
+        avgMiddleViews: number;
+        avgLowViews: number;
+    };
+}
+
 export class ClusteringService {
     private supabase: SupabaseClient<Database>;
 
@@ -391,6 +414,342 @@ export class ClusteringService {
             wcss: clusterResult.wcss,
             silhouetteScore,
             totalAnalyzed: vectors.length,
+        };
+    }
+
+    /**
+     * Perform segmented clustering by performance tier
+     * Separates hooks into top/middle/low performers and clusters each separately
+     * This reveals patterns within each performance level
+     */
+    async performSegmentedClustering(
+        userId: string,
+        searchTermId?: string,
+        topPercentile: number = 75,
+        lowPercentile: number = 25
+    ): Promise<SegmentedClusteringResult> {
+        // 1. Fetch all hook analyses (same as performClustering)
+        let query = this.supabase
+            .from("hook_analysis")
+            .select(`
+        *,
+        tiktok_videos!inner (
+          id,
+          view_count,
+          like_count,
+          share_count,
+          comment_count,
+          search_term_id,
+          search_terms!inner (
+            user_id
+          )
+        )
+      `)
+            .eq("tiktok_videos.search_terms.user_id", userId)
+            .not("analysis_result", "is", null);
+
+        if (searchTermId) {
+            query = query.eq("tiktok_videos.search_term_id", searchTermId);
+        }
+
+        const { data: analyses, error } = await query;
+
+        if (error) throw error;
+        const termMsg = searchTermId ? " for this search term" : "";
+        if (!analyses || analyses.length < 10) {
+            throw new Error(`Not enough data for segmented clustering${termMsg} (minimum 10 analyses required)`);
+        }
+
+        // 2. Calculate percentile thresholds based on view counts
+        const viewCounts = analyses
+            .map(a => a.tiktok_videos?.view_count || 0)
+            .sort((a, b) => a - b);
+
+        const topIndex = Math.floor((topPercentile / 100) * viewCounts.length);
+        const lowIndex = Math.floor((lowPercentile / 100) * viewCounts.length);
+
+        const topThreshold = viewCounts[topIndex] || 0;
+        const lowThreshold = viewCounts[lowIndex] || 0;
+
+        // 3. Segment analyses into tiers
+        const topTierAnalyses = analyses.filter(a => (a.tiktok_videos?.view_count || 0) >= topThreshold);
+        const lowTierAnalyses = analyses.filter(a => (a.tiktok_videos?.view_count || 0) < lowThreshold);
+        const middleTierAnalyses = analyses.filter(a => {
+            const views = a.tiktok_videos?.view_count || 0;
+            return views >= lowThreshold && views < topThreshold;
+        });
+
+        // 4. Helper function to perform clustering on a tier
+        const clusterTier = async (tierAnalyses: typeof analyses): Promise<ClusteringResult | null> => {
+            if (tierAnalyses.length < 5) {
+                return null; // Not enough data for meaningful clustering
+            }
+
+            const vectors: FeatureVector[] = [];
+            const validAnalyses: typeof tierAnalyses = [];
+
+            for (const analysis of tierAnalyses) {
+                const result = analysis.analysis_result as unknown as HookAnalysisResult;
+                const video = analysis.tiktok_videos;
+
+                if (!result.openingLines || !result.engagementTactics) continue;
+
+                const vector = featureExtractor.extractFeatureVector(result, {
+                    viewCount: video.view_count || 0,
+                    likeCount: video.like_count || 0,
+                    shareCount: video.share_count || 0,
+                    commentCount: video.comment_count || 0,
+                });
+
+                vectors.push(vector);
+                validAnalyses.push(analysis);
+            }
+
+            if (vectors.length < 5) return null;
+
+            // Standardize features
+            const rawFeatures = vectors.map(v => v.features);
+            const { standardized } = featureExtractor.standardizeFeatures(rawFeatures);
+
+            // Determine optimal K for this tier
+            const maxK = Math.min(5, Math.floor(vectors.length / 2));
+            const minK = Math.min(2, maxK);
+            const elbowPoints = KMeans.elbowMethod(standardized, minK, maxK);
+            const optimalK = KMeans.findOptimalK(elbowPoints);
+
+            // Run K-Means
+            const kmeans = new KMeans({ k: optimalK, randomSeed: 42 });
+            const clusterResult = kmeans.fit(standardized);
+            const silhouetteScore = kmeans.calculateSilhouetteScore(standardized, clusterResult.clusterAssignments);
+
+            // Build cluster stats (simplified version)
+            const clusters: ClusterStats[] = [];
+
+            const calculateStdDev = (values: number[], mean: number): number => {
+                if (values.length <= 1) return 0;
+                const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+                return Math.sqrt(variance);
+            };
+
+            const calculate95CI = (mean: number, stdDev: number, sampleSize: number): { lower: number; upper: number } => {
+                const z = 1.96;
+                const marginOfError = z * (stdDev / Math.sqrt(sampleSize));
+                return {
+                    lower: Math.max(0, mean - marginOfError),
+                    upper: mean + marginOfError
+                };
+            };
+
+            const euclideanDistance = (a: number[], b: number[]): number => {
+                return Math.sqrt(a.reduce((sum, val, idx) => sum + Math.pow(val - (b[idx] || 0), 2), 0));
+            };
+
+            for (let i = 0; i < optimalK; i++) {
+                const clusterIndices = clusterResult.clusterAssignments
+                    .map((cluster, index) => (cluster === i ? index : -1))
+                    .filter(index => index !== -1);
+
+                if (clusterIndices.length === 0) continue;
+
+                const clusterAnalyses = clusterIndices.map(index => validAnalyses[index]!);
+                const clusterVectors = clusterIndices.map(index => vectors[index]!);
+                const clusterStandardized = clusterIndices.map(index => standardized[index]!);
+                const centroid = clusterResult.centroids[i];
+                if (!centroid) continue;
+
+                // Calculate metrics
+                const viewCounts = clusterAnalyses.map(a => a?.tiktok_videos?.view_count || 0);
+                const avgViewCount = viewCounts.reduce((sum, v) => sum + v, 0) / viewCounts.length;
+                const stdDevViewCount = calculateStdDev(viewCounts, avgViewCount);
+                const viewCountCI = calculate95CI(avgViewCount, stdDevViewCount, viewCounts.length);
+
+                const likeCounts = clusterAnalyses.map(a => a?.tiktok_videos?.like_count || 0);
+                const avgLikeCount = likeCounts.reduce((sum, v) => sum + v, 0) / likeCounts.length;
+                const stdDevLikeCount = calculateStdDev(likeCounts, avgLikeCount);
+
+                const engagementRates = clusterAnalyses.map(a => {
+                    const views = a?.tiktok_videos?.view_count || 0;
+                    const likes = a?.tiktok_videos?.like_count || 0;
+                    return views > 0 ? (likes / views) * 100 : 0;
+                });
+                const avgEngagementRate = engagementRates.reduce((sum, v) => sum + v, 0) / engagementRates.length;
+                const stdDevEngagementRate = calculateStdDev(engagementRates, avgEngagementRate);
+                const engagementRateCI = calculate95CI(avgEngagementRate, stdDevEngagementRate, engagementRates.length);
+
+                const hookScores = clusterVectors.map(v => v.rawData.hookAnalysis.overallScore);
+                const avgHookScore = hookScores.reduce((sum, v) => sum + v, 0) / hookScores.length;
+                const stdDevHookScore = calculateStdDev(hookScores, avgHookScore);
+                const hookScoreCI = calculate95CI(avgHookScore, stdDevHookScore, hookScores.length);
+
+                const distances = clusterStandardized.map(vec => euclideanDistance(vec || [], centroid));
+                const intraClusterDistance = distances.reduce((sum, d) => sum + d, 0) / distances.length;
+                const maxPossibleDistance = Math.sqrt(centroid.length);
+                const cohesionScore = Math.max(0, Math.min(1, 1 - (intraClusterDistance / maxPossibleDistance)));
+
+                const featureNames = vectors[0]?.featureNames || [];
+                const dominantFeatures = centroid
+                    .map((value, idx) => ({
+                        feature: featureNames[idx] || 'unknown',
+                        value: value,
+                        importance: Math.abs(value)
+                    }))
+                    .sort((a, b) => b.importance - a.importance)
+                    .slice(0, 5);
+
+                const hookTypeCounts: Record<string, number> = {};
+                clusterVectors.forEach(v => {
+                    const type = v.rawData.hookAnalysis.engagementTactics?.hook_type || "Unknown";
+                    hookTypeCounts[type] = (hookTypeCounts[type] || 0) + 1;
+                });
+                const topHookTypes = Object.entries(hookTypeCounts)
+                    .map(([type, count]) => ({
+                        type,
+                        count,
+                        percentage: (count / clusterIndices.length) * 100
+                    }))
+                    .sort((a, b) => b.count - a.count)
+                    .slice(0, 3);
+
+                const techniqueCounts: Record<string, number> = {};
+                clusterVectors.forEach(v => {
+                    v.rawData.hookAnalysis.openingLines?.techniques?.forEach(t => {
+                        techniqueCounts[t] = (techniqueCounts[t] || 0) + 1;
+                    });
+                });
+                const commonTechniques = Object.entries(techniqueCounts)
+                    .map(([technique, count]) => ({
+                        technique,
+                        count,
+                        percentage: (count / clusterIndices.length) * 100
+                    }))
+                    .sort((a, b) => b.count - a.count)
+                    .slice(0, 5);
+
+                const emotionalProfile = { curiosity: 0, surprise: 0, urgency: 0, excitement: 0 };
+                clusterVectors.forEach(v => {
+                    const emotion = (v?.rawData?.hookAnalysis?.openingLines?.emotional_impact || '').toLowerCase();
+                    if (emotion.includes('curios') || emotion.includes('intrigue') || emotion.includes('suspense')) {
+                        emotionalProfile.curiosity++;
+                    } else if (emotion.includes('surprise') || emotion.includes('shock')) {
+                        emotionalProfile.surprise++;
+                    } else if (emotion.includes('urgency') || emotion.includes('fear') || emotion.includes('fomo')) {
+                        emotionalProfile.urgency++;
+                    } else if (emotion.includes('excite') || emotion.includes('joy') || emotion.includes('anticipation')) {
+                        emotionalProfile.excitement++;
+                    }
+                });
+
+                const totalEmotions = clusterIndices.length;
+                emotionalProfile.curiosity = (emotionalProfile.curiosity / totalEmotions) * 100;
+                emotionalProfile.surprise = (emotionalProfile.surprise / totalEmotions) * 100;
+                emotionalProfile.urgency = (emotionalProfile.urgency / totalEmotions) * 100;
+                emotionalProfile.excitement = (emotionalProfile.excitement / totalEmotions) * 100;
+
+                const representativeHooks = clusterAnalyses
+                    .map((a, idx) => {
+                        const analysis = a.analysis_result as unknown as HookAnalysisResult;
+                        const views = a?.tiktok_videos?.view_count || 0;
+                        const likes = a?.tiktok_videos?.like_count || 0;
+                        const distance = distances[idx] || 0;
+                        return {
+                            id: a.id,
+                            text: analysis?.openingLines?.transcript || "",
+                            score: analysis?.overallScore || 0,
+                            views: views,
+                            engagementRate: views > 0 ? (likes / views) * 100 : 0,
+                            distanceFromCentroid: distance
+                        };
+                    })
+                    .sort((a, b) => {
+                        const scoreA = (a?.score || 0) * 0.7 - ((a?.distanceFromCentroid || 0) * 10);
+                        const scoreB = (b?.score || 0) * 0.7 - ((b?.distanceFromCentroid || 0) * 10);
+                        return scoreB - scoreA;
+                    })
+                    .slice(0, 3);
+
+                const sampleSize = clusterIndices.length;
+                const z = 1.96;
+                const marginOfError = z * (stdDevHookScore / Math.sqrt(sampleSize));
+
+                clusters.push({
+                    clusterId: i,
+                    size: clusterIndices.length,
+                    centroid: centroid,
+                    avgViewCount,
+                    stdDevViewCount,
+                    avgLikeCount,
+                    stdDevLikeCount,
+                    avgEngagementRate,
+                    stdDevEngagementRate,
+                    avgHookScore,
+                    stdDevHookScore,
+                    viewCountCI,
+                    engagementRateCI,
+                    hookScoreCI,
+                    intraClusterDistance,
+                    cohesionScore,
+                    dominantFeatures,
+                    topHookTypes,
+                    commonTechniques,
+                    emotionalProfile,
+                    representativeHooks,
+                    sampleSize,
+                    marginOfError
+                });
+            }
+
+            clusters.sort((a, b) => b.avgHookScore - a.avgHookScore);
+
+            return {
+                clusters,
+                k: optimalK,
+                wcss: clusterResult.wcss,
+                silhouetteScore,
+                totalAnalyzed: vectors.length
+            };
+        };
+
+        // 5. Cluster each tier
+        const [topResult, middleResult, lowResult] = await Promise.all([
+            clusterTier(topTierAnalyses),
+            clusterTier(middleTierAnalyses),
+            clusterTier(lowTierAnalyses)
+        ]);
+
+        // Create empty result if tier doesn't have enough data
+        const emptyResult: ClusteringResult = {
+            clusters: [],
+            k: 0,
+            wcss: 0,
+            silhouetteScore: 0,
+            totalAnalyzed: 0
+        };
+
+        // 6. Calculate overall stats
+        const calcAvgViews = (tierAnalyses: typeof analyses) => {
+            if (tierAnalyses.length === 0) return 0;
+            return tierAnalyses.reduce((sum, a) => sum + (a.tiktok_videos?.view_count || 0), 0) / tierAnalyses.length;
+        };
+
+        return {
+            topTier: topResult || emptyResult,
+            middleTier: middleResult || emptyResult,
+            lowTier: lowResult || emptyResult,
+            thresholds: {
+                topPercentile,
+                lowPercentile,
+                topViewCount: topThreshold,
+                lowViewCount: lowThreshold
+            },
+            overallStats: {
+                totalAnalyzed: analyses.length,
+                topCount: topTierAnalyses.length,
+                middleCount: middleTierAnalyses.length,
+                lowCount: lowTierAnalyses.length,
+                avgTopViews: calcAvgViews(topTierAnalyses),
+                avgMiddleViews: calcAvgViews(middleTierAnalyses),
+                avgLowViews: calcAvgViews(lowTierAnalyses)
+            }
         };
     }
 }

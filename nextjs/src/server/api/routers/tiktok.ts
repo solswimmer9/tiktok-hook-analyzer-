@@ -467,4 +467,21 @@ export const tiktokRouter = createTRPCRouter({
       const clusteringService = new ClusteringService(ctx.supabase as any);
       return await clusteringService.performClustering(ctx.user.id, input.k, input.searchTermId);
     }),
+
+  // Segmented Clustering (Performance Tiers)
+  getSegmentedClusters: protectedProcedure
+    .input(z.object({
+      searchTermId: z.string().optional(),
+      topPercentile: z.number().min(50).max(95).default(75),
+      lowPercentile: z.number().min(5).max(50).default(25)
+    }))
+    .query(async ({ ctx, input }) => {
+      const clusteringService = new ClusteringService(ctx.supabase as any);
+      return await clusteringService.performSegmentedClustering(
+        ctx.user.id,
+        input.searchTermId,
+        input.topPercentile,
+        input.lowPercentile
+      );
+    }),
 });

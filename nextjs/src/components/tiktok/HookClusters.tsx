@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/utils/trpc";
-import { Brain, TrendingUp, TrendingDown, Lightbulb, CheckCircle2, MessageCircle } from "lucide-react";
+import { Brain, TrendingUp, TrendingDown, Lightbulb, CheckCircle2, MessageCircle, AlertTriangle, XCircle } from "lucide-react";
 import { ClusterStats } from "@/server/services/clustering";
 
 export function HookClusters({ searchTermId }: { searchTermId?: string }) {
@@ -161,6 +161,73 @@ export function HookClusters({ searchTermId }: { searchTermId?: string }) {
                 </CardContent>
             </Card>
 
+            {/* Warning Section for Low Performers */}
+            {worst && (
+                <Card className="border-orange-200 bg-orange-50/30">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-orange-600" />
+                            Performance Warning: Patterns to Avoid
+                        </CardTitle>
+                        <CardDescription>
+                            These hook characteristics are statistically associated with lower performance
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {/* Main warning */}
+                        <div className="flex items-start gap-3 p-4 bg-white rounded-lg border border-orange-200">
+                            <XCircle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                            <div>
+                                <p className="text-sm font-semibold text-foreground mb-1">
+                                    Avoid {worst.topHookTypes[0]?.type || 'certain'} hook patterns
+                                </p>
+                                <p className="text-sm text-muted-foreground mb-2">
+                                    This pattern averages only <span className="font-semibold">{(worst.avgViewCount / 1000).toFixed(1)}K views</span>,
+                                    {" "}<span className="font-semibold">{((1 - worst.avgViewCount / best!.avgViewCount) * 100).toFixed(0)}% lower</span> than top performers.
+                                    {" "}Statistical confidence: {worst.cohesionScore > 0.6 ? 'High' : 'Moderate'} (cohesion = {worst.cohesionScore.toFixed(2)})
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Specific anti-patterns */}
+                        {worst.commonTechniques.length > 0 && (
+                            <div className="p-4 bg-white rounded-lg border">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                    <span className="text-sm font-semibold">Overused Techniques in Low Performers</span>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {worst.commonTechniques.slice(0, 3).map((tech, idx) => (
+                                        <Badge key={idx} variant="outline" className="text-xs bg-orange-50 border-orange-200">
+                                            {tech.technique} ({tech.percentage.toFixed(0)}%)
+                                        </Badge>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                    While not inherently bad, these techniques appear frequently in underperforming hooks.
+                                    {" "}Consider using techniques from top performers instead.
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Performance gap highlight */}
+                        <div className="p-4 bg-gradient-to-r from-orange-100 to-red-100 rounded-lg border border-orange-300">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-semibold text-foreground">Performance Gap</p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Top performers get <span className="font-bold">{(best!.avgViewCount / worst.avgViewCount).toFixed(1)}x more views</span> using different patterns
+                                    </p>
+                                </div>
+                                <div className="text-3xl font-bold text-orange-600">
+                                    {(best!.avgViewCount / worst.avgViewCount).toFixed(1)}x
+                                </div>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Detailed Cluster Cards */}
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {sortedClusters.map((cluster, index) => (
@@ -170,6 +237,7 @@ export function HookClusters({ searchTermId }: { searchTermId?: string }) {
                         rank={index + 1}
                         totalClusters={sortedClusters.length}
                         totalAnalyzed={clusteringResult.totalAnalyzed}
+                        topPerformerAvgViews={best!.avgViewCount}
                     />
                 ))}
             </div>
@@ -177,11 +245,12 @@ export function HookClusters({ searchTermId }: { searchTermId?: string }) {
     );
 }
 
-function ClusterCard({ cluster, rank, totalClusters, totalAnalyzed }: {
+function ClusterCard({ cluster, rank, totalClusters, totalAnalyzed, topPerformerAvgViews }: {
     cluster: ClusterStats;
     rank: number;
     totalClusters: number;
     totalAnalyzed: number;
+    topPerformerAvgViews: number;
 }) {
     const primaryType = cluster.topHookTypes[0]?.type || "Mixed";
     const isTopPerformer = rank === 1;
@@ -211,6 +280,25 @@ function ClusterCard({ cluster, rank, totalClusters, totalAnalyzed }: {
         return `📊 Test occasionally but prioritize higher-performing, more cohesive strategies`;
     };
 
+    // Get performance warning if applicable
+    const getPerformanceWarning = () => {
+        if (isBottomPerformer && topPerformerAvgViews > 0) {
+            return {
+                show: true,
+                message: `${((1 - cluster.avgViewCount / topPerformerAvgViews) * 100).toFixed(0)}% lower views than top performer`
+            };
+        }
+        if (cluster.avgHookScore < 65) {
+            return {
+                show: true,
+                message: 'Below-average performance - use cautiously'
+            };
+        }
+        return { show: false, message: '' };
+    };
+
+    const warning = getPerformanceWarning();
+
     return (
         <Card className={`flex flex-col h-full ${tier.borderColor} ${tier.bgColor}`}>
             <CardHeader className="pb-3">
@@ -225,10 +313,19 @@ function ClusterCard({ cluster, rank, totalClusters, totalAnalyzed }: {
                 <CardTitle className="text-lg flex items-center gap-2">
                     {primaryType}
                     {isTopPerformer && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                    {isBottomPerformer && <AlertTriangle className="h-4 w-4 text-orange-600" />}
                 </CardTitle>
                 <CardDescription>
                     {cluster.size} hooks ({Math.round((cluster.size / totalAnalyzed) * 100)}% of analyzed videos)
                 </CardDescription>
+                {warning.show && (
+                    <div className="mt-2">
+                        <Badge variant="outline" className="text-xs bg-orange-50 border-orange-300 text-orange-700">
+                            <XCircle className="h-3 w-3 mr-1" />
+                            {warning.message}
+                        </Badge>
+                    </div>
+                )}
             </CardHeader>
 
             <CardContent className="flex-1 flex flex-col gap-4">
