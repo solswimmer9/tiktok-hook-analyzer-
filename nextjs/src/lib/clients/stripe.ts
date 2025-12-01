@@ -11,4 +11,5 @@ export default stripe;
 */
 
 // Temporary export to prevent build errors
-export default null;
+const stripeClient = null;
+export default stripeClient;

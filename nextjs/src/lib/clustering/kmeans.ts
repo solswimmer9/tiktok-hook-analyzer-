@@ -1,4 +1,3 @@
-// @ts-nocheck - Disable type checking for this file due to noUncheckedIndexedAccess
 /**
  * K-Means Clustering Algorithm Implementation
  *
@@ -82,7 +81,9 @@ export class KMeans {
 
     // Choose first centroid randomly
     const firstIndex = Math.floor(this.rng() * numPoints);
-    centroids.push([...data[firstIndex]]);
+    const firstPoint = data[firstIndex];
+    if (!firstPoint) throw new Error('Failed to select first centroid');
+    centroids.push([...firstPoint]);
 
     // Choose remaining centroids with probability proportional to distance squared
     for (let c = 1; c < this.config.k; c++) {
@@ -108,14 +109,16 @@ export class KMeans {
       let selectedIndex = 0;
 
       for (let i = 0; i < distances.length; i++) {
-        cumulativeDistance += distances[i];
+        cumulativeDistance += distances[i]!;
         if (cumulativeDistance >= target) {
           selectedIndex = i;
           break;
         }
       }
 
-      centroids.push([...data[selectedIndex]]);
+      const selectedPoint = data[selectedIndex];
+      if (!selectedPoint) throw new Error('Failed to select centroid');
+      centroids.push([...selectedPoint]);
     }
 
     return centroids;
@@ -130,7 +133,8 @@ export class KMeans {
       let clusterIndex = 0;
 
       for (let c = 0; c < centroids.length; c++) {
-        const distance = this.euclideanDistance(point, centroids[c]);
+        const centroid = centroids[c]!;
+        const distance = this.euclideanDistance(point, centroid);
         if (distance < minDistance) {
           minDistance = distance;
           clusterIndex = c;
@@ -145,7 +149,9 @@ export class KMeans {
    * Update centroids based on current cluster assignments
    */
   private updateCentroids(data: number[][], assignments: number[]): number[][] {
-    const numFeatures = data[0].length;
+    const firstPoint = data[0];
+    if (!firstPoint) throw new Error('Cannot update centroids with empty data');
+    const numFeatures = firstPoint.length;
     const centroids: number[][] = Array(this.config.k)
       .fill(null)
       .map(() => Array(numFeatures).fill(0));
@@ -153,18 +159,20 @@ export class KMeans {
 
     // Sum up all points in each cluster
     for (let i = 0; i < data.length; i++) {
-      const cluster = assignments[i];
+      const cluster = assignments[i]!;
+      const point = data[i]!;
       counts[cluster]++;
       for (let f = 0; f < numFeatures; f++) {
-        centroids[cluster][f] += data[i][f];
+        centroids[cluster]![f]! += point[f]!;
       }
     }
 
     // Calculate means
     for (let c = 0; c < this.config.k; c++) {
-      if (counts[c] > 0) {
+      const count = counts[c]!;
+      if (count > 0) {
         for (let f = 0; f < numFeatures; f++) {
-          centroids[c][f] /= counts[c];
+          centroids[c]![f]! /= count;
         }
       }
     }
@@ -179,8 +187,10 @@ export class KMeans {
   private calculateWCSS(data: number[][], assignments: number[], centroids: number[][]): number {
     let wcss = 0;
     for (let i = 0; i < data.length; i++) {
-      const cluster = assignments[i];
-      const distance = this.euclideanDistance(data[i], centroids[cluster]);
+      const cluster = assignments[i]!;
+      const point = data[i]!;
+      const centroid = centroids[cluster]!;
+      const distance = this.euclideanDistance(point, centroid);
       wcss += distance * distance;
     }
     return wcss;
@@ -191,7 +201,9 @@ export class KMeans {
    */
   private hasConverged(oldCentroids: number[][], newCentroids: number[][]): boolean {
     for (let c = 0; c < oldCentroids.length; c++) {
-      const distance = this.euclideanDistance(oldCentroids[c], newCentroids[c]);
+      const oldCentroid = oldCentroids[c]!;
+      const newCentroid = newCentroids[c]!;
+      const distance = this.euclideanDistance(oldCentroid, newCentroid);
       if (distance > this.config.convergenceThreshold) {
         return false;
       }
@@ -240,7 +252,7 @@ export class KMeans {
     // Calculate cluster sizes
     const clusterSizes = Array(this.config.k).fill(0);
     for (const cluster of assignments) {
-      clusterSizes[cluster]++;
+      clusterSizes[cluster]! ++;
     }
 
     return {
@@ -275,14 +287,16 @@ export class KMeans {
     const silhouetteScores: number[] = [];
 
     for (let i = 0; i < data.length; i++) {
-      const currentCluster = assignments[i];
+      const currentCluster = assignments[i]!;
+      const currentPoint = data[i]!;
 
       // Calculate a(i): average distance to points in same cluster
       let aSumDistance = 0;
       let aCount = 0;
       for (let j = 0; j < data.length; j++) {
         if (i !== j && assignments[j] === currentCluster) {
-          aSumDistance += this.euclideanDistance(data[i], data[j]);
+          const otherPoint = data[j]!;
+          aSumDistance += this.euclideanDistance(currentPoint, otherPoint);
           aCount++;
         }
       }
@@ -297,7 +311,8 @@ export class KMeans {
         let bCount = 0;
         for (let j = 0; j < data.length; j++) {
           if (assignments[j] === cluster) {
-            bSumDistance += this.euclideanDistance(data[i], data[j]);
+            const otherPoint = data[j]!;
+            bSumDistance += this.euclideanDistance(currentPoint, otherPoint);
             bCount++;
           }
         }
@@ -351,9 +366,14 @@ export class KMeans {
    * Returns recommended k value
    */
   static findOptimalK(elbowPoints: ElbowPoint[]): number {
+    if (elbowPoints.length === 0) {
+      throw new Error('Cannot find optimal k from empty elbow points array');
+    }
+
     // Primary: Choose k with highest silhouette score
-    let bestK = elbowPoints[0].k;
-    let bestScore = elbowPoints[0].silhouetteScore ?? -1;
+    const firstPoint = elbowPoints[0]!;
+    let bestK = firstPoint.k;
+    let bestScore = firstPoint.silhouetteScore ?? -1;
 
     for (const point of elbowPoints) {
       if ((point.silhouetteScore ?? -1) > bestScore) {

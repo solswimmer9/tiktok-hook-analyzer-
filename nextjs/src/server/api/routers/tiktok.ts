@@ -1,6 +1,9 @@
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
 import { inngestClient } from "@/lib/clients/inngest";
 import { ClusteringService } from "@/server/services/clustering";
+import { checkSearchTermLimit, requirePerformanceAnalysis } from "@/server/middleware/subscription";
+import { trackUsage } from "@/lib/subscription/usage-tracker";
+import { UsageMetric } from "@/types/subscription";
 import { z } from "zod";
 
 export const tiktokRouter = createTRPCRouter({
@@ -19,6 +22,9 @@ export const tiktokRouter = createTRPCRouter({
   createSearchTerm: protectedProcedure
     .input(z.object({ term: z.string().min(1).max(100) }))
     .mutation(async ({ ctx, input }) => {
+      // Check subscription limit before creating search term
+      await checkSearchTermLimit(ctx.supabase, ctx.user.id);
+
       const { data, error } = await ctx.supabase
         .from("search_terms")
         .insert({
@@ -30,6 +36,9 @@ export const tiktokRouter = createTRPCRouter({
         .single();
 
       if (error) throw error;
+
+      // Track usage
+      await trackUsage(ctx.supabase, ctx.user.id, UsageMetric.SEARCH_TERMS_CREATED);
 
       // Queue video search job
       await inngestClient.send({
@@ -476,6 +485,9 @@ export const tiktokRouter = createTRPCRouter({
       lowPercentile: z.number().min(5).max(50).default(25)
     }))
     .query(async ({ ctx, input }) => {
+      // Require Pro tier or higher for performance analysis
+      await requirePerformanceAnalysis(ctx.supabase, ctx.user.id);
+
       const clusteringService = new ClusteringService(ctx.supabase as any);
       return await clusteringService.performSegmentedClustering(
         ctx.user.id,

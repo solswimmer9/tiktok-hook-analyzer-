@@ -1,5 +1,6 @@
 import { adminRouter } from "./routers/admin";
 import { tiktokRouter } from "./routers/tiktok";
+import { subscriptionRouter } from "./routers/subscription";
 import { createTRPCRouter } from "./trpc";
 
 /**
@@ -10,6 +11,7 @@ import { createTRPCRouter } from "./trpc";
 export const appRouter = createTRPCRouter({
   admin: adminRouter,
   tiktok: tiktokRouter,
+  subscription: subscriptionRouter,
 });
 
 // export type definition of API

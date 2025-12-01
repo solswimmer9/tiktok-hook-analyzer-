@@ -1,4 +1,3 @@
-// @ts-nocheck - Disable type checking for this file due to noUncheckedIndexedAccess
 import { HookAnalysisResult } from "@/lib/clients/gemini";
 import { Database } from "@shared-types/database.types";
 

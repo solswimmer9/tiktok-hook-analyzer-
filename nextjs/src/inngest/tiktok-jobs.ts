@@ -5,6 +5,9 @@ import { videoProcessor } from "@/lib/video-processing";
 import { r2Client } from "@/lib/clients/r2";
 import { geminiClient, HookAnalysisResult } from "@/lib/clients/gemini";
 import { Database } from "@shared-types/database.types";
+import { trackUsage, canAnalyzeVideo } from "@/lib/subscription/usage-tracker";
+import { UsageMetric, SubscriptionTier } from "@/types/subscription";
+import { getUserSubscription } from "@/server/middleware/subscription";
 
 import { logDebug } from "@/lib/debug-logger";
 
@@ -274,7 +277,52 @@ export const analyzeVideoHook = inngestClient.createFunction(
 
     logger.info(`Starting hook analysis for video: ${videoId}`);
 
-    // Step 1: Download video from Supabase Storage and analyze with Gemini
+    // Step 1: Check video analysis limit before processing
+    await step.run("subscription: check video analysis limit", async () => {
+      logger.info('Checking video analysis limit...');
+
+      // Get the video with user_id from search_terms
+      const { data: video, error: videoError } = await supabaseServer
+        .from("tiktok_videos")
+        .select(`
+          id,
+          search_terms!inner (
+            user_id
+          )
+        `)
+        .eq("id", videoId)
+        .single();
+
+      if (videoError) {
+        logger.error(`Failed to fetch video for limit check: ${videoError.message}`);
+        throw new Error(`Failed to fetch video for limit check: ${videoError.message}`);
+      }
+
+      const userId = video.search_terms.user_id;
+
+      // Get user's subscription profile
+      const profile = await getUserSubscription(supabaseServer, userId);
+
+      // Check if user can analyze more videos
+      const limitCheck = await canAnalyzeVideo(
+        supabaseServer,
+        userId,
+        (profile as any).subscription_tier as SubscriptionTier
+      );
+
+      if (!limitCheck.allowed) {
+        const message = limitCheck.limit
+          ? `Video analysis limit reached (${limitCheck.limit}/${limitCheck.limit}). User must upgrade to analyze more videos.`
+          : 'Video analysis is not available on this plan.';
+
+        logger.error(message);
+        throw new Error(message);
+      }
+
+      logger.info(`Limit check passed: ${limitCheck.currentUsage}/${limitCheck.limit || 'unlimited'} videos analyzed`);
+    });
+
+    // Step 2: Download video from Supabase Storage and analyze with Gemini
     const analysis = await step.run("storage: download and analyze video", async () => {
       // Download video from Supabase Storage using authenticated client
       logger.info(`Downloading video from Supabase Storage with key: ${r2Key}`);
@@ -311,7 +359,7 @@ export const analyzeVideoHook = inngestClient.createFunction(
       return result;
     });
 
-    // Step 2: Save analysis to database
+    // Step 3: Save analysis to database
     await step.run("db: save hook analysis", async () => {
       logger.info('Saving hook analysis to database...');
 
@@ -335,6 +383,38 @@ export const analyzeVideoHook = inngestClient.createFunction(
 
       logger.info('Hook analysis saved successfully');
       return data;
+    });
+
+    // Step 4: Track video analysis usage
+    await step.run("usage: track video analysis", async () => {
+      logger.info('Tracking video analysis usage...');
+
+      // Get the video with user_id from search_terms
+      const { data: video, error: videoError } = await supabaseServer
+        .from("tiktok_videos")
+        .select(`
+          id,
+          search_terms!inner (
+            user_id
+          )
+        `)
+        .eq("id", videoId)
+        .single();
+
+      if (videoError) {
+        logger.error(`Failed to fetch video for usage tracking: ${videoError.message}`);
+        throw new Error(`Failed to fetch video for usage tracking: ${videoError.message}`);
+      }
+
+      // Track the video analysis usage
+      await trackUsage(
+        supabaseServer,
+        video.search_terms.user_id,
+        UsageMetric.VIDEOS_ANALYZED,
+        1
+      );
+
+      logger.info('Video analysis usage tracked successfully');
     });
 
     return {

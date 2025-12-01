@@ -1,0 +1,419 @@
+/**
+ * Polar Webhook Handler
+ *
+ * This API route handles incoming webhook events from Polar.
+ * It processes subscription lifecycle events and updates the database accordingly.
+ *
+ * Webhook events handled:
+ * - subscription.created
+ * - subscription.active
+ * - subscription.updated
+ * - subscription.canceled
+ * - subscription.revoked
+ * - customer.created
+ * - order.paid
+ */
+
+import { NextApiRequest, NextApiResponse } from 'next';
+import { createClient } from '@supabase/supabase-js';
+import { Database } from '@/../../shared-types/database.types';
+import { PolarWebhookEvent, SubscriptionTier, SubscriptionStatus } from '@/types/subscription';
+import crypto from 'crypto';
+
+// Initialize Supabase client with service role (bypasses RLS)
+const supabaseAdmin = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  }
+);
+
+const POLAR_WEBHOOK_SECRET = process.env.POLAR_WEBHOOK_SECRET!;
+
+/**
+ * Verify Polar webhook signature
+ */
+function verifyWebhookSignature(
+  payload: string,
+  signature: string | undefined
+): boolean {
+  if (!signature || !POLAR_WEBHOOK_SECRET) {
+    console.error('Missing signature or webhook secret');
+    return false;
+  }
+
+  try {
+    const hmac = crypto.createHmac('sha256', POLAR_WEBHOOK_SECRET);
+    hmac.update(payload);
+    const digest = hmac.digest('hex');
+
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(digest)
+    );
+  } catch (error) {
+    console.error('Error verifying webhook signature:', error);
+    return false;
+  }
+}
+
+/**
+ * Map Polar subscription status to our status enum
+ */
+function mapSubscriptionStatus(polarStatus: string): SubscriptionStatus {
+  const statusMap: Record<string, SubscriptionStatus> = {
+    active: 'active',
+    canceled: 'canceled',
+    incomplete: 'past_due',
+    incomplete_expired: 'canceled',
+    past_due: 'past_due',
+    trialing: 'trialing',
+    unpaid: 'past_due',
+    paused: 'paused',
+  };
+
+  return statusMap[polarStatus.toLowerCase()] || 'active';
+}
+
+/**
+ * Determine subscription tier from Polar product ID
+ * You'll need to update this mapping with your actual Polar product IDs
+ */
+function getTierFromProductId(productId: string): SubscriptionTier {
+  // TODO: Update these mappings with your actual Polar product IDs
+  const tierMap: Record<string, SubscriptionTier> = {
+    // Example:
+    // 'prod_pro_monthly_abc123': 'pro',
+    // 'prod_enterprise_monthly_xyz789': 'enterprise',
+  };
+
+  return tierMap[productId] || 'free';
+}
+
+/**
+ * Find user by Polar customer ID or email
+ */
+async function findUserByPolarCustomer(
+  polarCustomerId: string,
+  email?: string
+): Promise<string | null> {
+  // Try to find by polar_customer_id first
+  const { data: profile } = await (supabaseAdmin as any)
+    .from('user_profiles')
+    .select('id')
+    .eq('polar_customer_id', polarCustomerId)
+    .single();
+
+  if (profile) {
+    return profile.id;
+  }
+
+  // If not found and email is provided, try to find by email
+  if (email) {
+    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
+    const user = users.find(u => u.email === email);
+    return user?.id || null;
+  }
+
+  return null;
+}
+
+/**
+ * Handle subscription.created event
+ */
+async function handleSubscriptionCreated(event: any) {
+  const subscription = event.data;
+  const customerId = subscription.customer_id;
+  const productId = subscription.product_id;
+  const status = subscription.status;
+
+  const userId = await findUserByPolarCustomer(customerId);
+  if (!userId) {
+    console.error('User not found for customer:', customerId);
+    return;
+  }
+
+  const tier = getTierFromProductId(productId);
+  const mappedStatus = mapSubscriptionStatus(status);
+
+  await (supabaseAdmin as any)
+    .from('user_profiles')
+    .update({
+      polar_customer_id: customerId,
+      polar_subscription_id: subscription.id,
+      subscription_tier: tier,
+      subscription_status: mappedStatus,
+      subscription_started_at: subscription.started_at || new Date().toISOString(),
+    })
+    .eq('id', userId);
+
+  console.log(`Subscription created for user ${userId}, tier: ${tier}`);
+}
+
+/**
+ * Handle subscription.active event
+ */
+async function handleSubscriptionActive(event: any) {
+  const subscription = event.data;
+  const customerId = subscription.customer_id;
+  const productId = subscription.product_id;
+
+  const userId = await findUserByPolarCustomer(customerId);
+  if (!userId) {
+    console.error('User not found for customer:', customerId);
+    return;
+  }
+
+  const tier = getTierFromProductId(productId);
+
+  await (supabaseAdmin as any)
+    .from('user_profiles')
+    .update({
+      subscription_tier: tier,
+      subscription_status: 'active',
+      subscription_started_at: subscription.started_at || new Date().toISOString(),
+    })
+    .eq('id', userId);
+
+  console.log(`Subscription activated for user ${userId}, tier: ${tier}`);
+}
+
+/**
+ * Handle subscription.canceled event
+ */
+async function handleSubscriptionCanceled(event: any) {
+  const subscription = event.data;
+  const customerId = subscription.customer_id;
+
+  const userId = await findUserByPolarCustomer(customerId);
+  if (!userId) {
+    console.error('User not found for customer:', customerId);
+    return;
+  }
+
+  await (supabaseAdmin as any)
+    .from('user_profiles')
+    .update({
+      subscription_status: 'canceled',
+      subscription_canceled_at: new Date().toISOString(),
+      subscription_ends_at: subscription.ended_at || subscription.current_period_end,
+    })
+    .eq('id', userId);
+
+  console.log(`Subscription canceled for user ${userId}`);
+}
+
+/**
+ * Handle subscription.revoked event
+ * Immediately revoke access and downgrade to free tier
+ */
+async function handleSubscriptionRevoked(event: any) {
+  const subscription = event.data;
+  const customerId = subscription.customer_id;
+
+  const userId = await findUserByPolarCustomer(customerId);
+  if (!userId) {
+    console.error('User not found for customer:', customerId);
+    return;
+  }
+
+  await (supabaseAdmin as any)
+    .from('user_profiles')
+    .update({
+      subscription_tier: 'free',
+      subscription_status: 'canceled',
+      subscription_canceled_at: new Date().toISOString(),
+      subscription_ends_at: new Date().toISOString(),
+    })
+    .eq('id', userId);
+
+  console.log(`Subscription revoked for user ${userId}, downgraded to free`);
+}
+
+/**
+ * Handle subscription.updated event
+ */
+async function handleSubscriptionUpdated(event: any) {
+  const subscription = event.data;
+  const customerId = subscription.customer_id;
+  const productId = subscription.product_id;
+  const status = subscription.status;
+
+  const userId = await findUserByPolarCustomer(customerId);
+  if (!userId) {
+    console.error('User not found for customer:', customerId);
+    return;
+  }
+
+  const tier = getTierFromProductId(productId);
+  const mappedStatus = mapSubscriptionStatus(status);
+
+  await (supabaseAdmin as any)
+    .from('user_profiles')
+    .update({
+      subscription_tier: tier,
+      subscription_status: mappedStatus,
+    })
+    .eq('id', userId);
+
+  console.log(`Subscription updated for user ${userId}, tier: ${tier}, status: ${mappedStatus}`);
+}
+
+/**
+ * Handle customer.created event
+ */
+async function handleCustomerCreated(event: any) {
+  const customer = event.data;
+  const email = customer.email;
+  const externalId = customer.metadata?.external_id || customer.external_id;
+
+  // If external_id is set, use it to find the user
+  if (externalId) {
+    await (supabaseAdmin as any)
+      .from('user_profiles')
+      .update({
+        polar_customer_id: customer.id,
+      })
+      .eq('id', externalId);
+
+    console.log(`Polar customer ${customer.id} linked to user ${externalId}`);
+  } else if (email) {
+    // Try to find user by email
+    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
+    const user = users.find(u => u.email === email);
+    if (user) {
+      await (supabaseAdmin as any)
+        .from('user_profiles')
+        .update({
+          polar_customer_id: customer.id,
+        })
+        .eq('id', user.id);
+
+      console.log(`Polar customer ${customer.id} linked to user ${user.id} via email`);
+    }
+  }
+}
+
+/**
+ * Handle order.paid event
+ * This could be a one-time payment or subscription renewal
+ */
+async function handleOrderPaid(event: any) {
+  const order = event.data;
+  const customerId = order.customer_id;
+
+  const userId = await findUserByPolarCustomer(customerId);
+  if (!userId) {
+    console.error('User not found for customer:', customerId);
+    return;
+  }
+
+  console.log(`Order paid for user ${userId}, order: ${order.id}`);
+  // You could track this in a separate orders table if needed
+}
+
+/**
+ * Log subscription event to database
+ */
+async function logSubscriptionEvent(
+  userId: string,
+  eventType: string,
+  payload: any,
+  polarEventId?: string
+) {
+  await (supabaseAdmin as any).from('subscription_events').insert({
+    user_id: userId,
+    event_type: eventType,
+    polar_event_id: polarEventId,
+    payload,
+  });
+}
+
+/**
+ * Main webhook handler
+ */
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  // Only allow POST requests
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    // Get raw body as string for signature verification
+    const rawBody = JSON.stringify(req.body);
+    const signature = req.headers['polar-signature'] as string | undefined;
+
+    // Verify webhook signature
+    if (!verifyWebhookSignature(rawBody, signature)) {
+      console.error('Invalid webhook signature');
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    const event = req.body;
+    const eventType = event.type as PolarWebhookEvent;
+
+    console.log(`Received Polar webhook: ${eventType}`);
+
+    // Route to appropriate handler
+    switch (eventType) {
+      case PolarWebhookEvent.SUBSCRIPTION_CREATED:
+        await handleSubscriptionCreated(event);
+        break;
+
+      case PolarWebhookEvent.SUBSCRIPTION_ACTIVE:
+        await handleSubscriptionActive(event);
+        break;
+
+      case PolarWebhookEvent.SUBSCRIPTION_UPDATED:
+        await handleSubscriptionUpdated(event);
+        break;
+
+      case PolarWebhookEvent.SUBSCRIPTION_CANCELED:
+        await handleSubscriptionCanceled(event);
+        break;
+
+      case PolarWebhookEvent.SUBSCRIPTION_REVOKED:
+        await handleSubscriptionRevoked(event);
+        break;
+
+      case PolarWebhookEvent.CUSTOMER_CREATED:
+        await handleCustomerCreated(event);
+        break;
+
+      case PolarWebhookEvent.ORDER_PAID:
+        await handleOrderPaid(event);
+        break;
+
+      default:
+        console.log(`Unhandled event type: ${eventType}`);
+    }
+
+    // Log the event if we have a user
+    const customerId = event.data?.customer_id;
+    if (customerId) {
+      const userId = await findUserByPolarCustomer(customerId, event.data?.email);
+      if (userId) {
+        await logSubscriptionEvent(userId, eventType, event, event.id);
+      }
+    }
+
+    return res.status(200).json({ received: true });
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// Disable body parser so we can get raw body for signature verification
+export const config = {
+  api: {
+    bodyParser: true, // We'll use the parsed body and stringify it for verification
+  },
+};

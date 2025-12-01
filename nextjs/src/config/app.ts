@@ -42,6 +42,16 @@ export const appConfig = {
         ],
       },
       {
+        title: "Subscription",
+        url: "/dashboard/subscription",
+        icon: "CreditCard",
+      },
+      {
+        title: "Pricing",
+        url: "/pricing",
+        icon: "DollarSign",
+      },
+      {
         title: "Settings",
         url: "/dashboard/settings",
         icon: "Settings",

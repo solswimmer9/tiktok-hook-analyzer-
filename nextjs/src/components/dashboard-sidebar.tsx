@@ -26,7 +26,9 @@ import {
   Brain,
   TrendingUp,
   Settings,
-  LayoutDashboard
+  LayoutDashboard,
+  CreditCard,
+  DollarSign
 } from "lucide-react";
 import { useRouter } from "next/router";
 import {
@@ -44,7 +46,9 @@ const iconMap: Record<string, any> = {
   Brain,
   TrendingUp,
   Settings,
-  LayoutDashboard
+  LayoutDashboard,
+  CreditCard,
+  DollarSign
 };
 
 export default function DashboardSidebar() {
