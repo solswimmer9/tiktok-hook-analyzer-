@@ -18,6 +18,12 @@ export const serverSchema = z.object({
   // Inngest (only required in production)
   INNGEST_EVENT_KEY: z.string().optional(),
   INNGEST_SIGNING_KEY: z.string().optional(),
+
+  // Polar (subscription management)
+  POLAR_ACCESS_TOKEN: z.string().optional(),
+  POLAR_ORGANIZATION_ID: z.string().optional(),
+  POLAR_WEBHOOK_SECRET: z.string().optional(),
+  POLAR_API_URL: z.string().optional().default("https://sandbox-api.polar.sh"),
 });
 
 /**
@@ -38,6 +44,12 @@ export const serverEnv = {
   // Inngest
   INNGEST_EVENT_KEY: process.env.INNGEST_EVENT_KEY,
   INNGEST_SIGNING_KEY: process.env.INNGEST_SIGNING_KEY,
+
+  // Polar
+  POLAR_ACCESS_TOKEN: process.env.POLAR_ACCESS_TOKEN,
+  POLAR_ORGANIZATION_ID: process.env.POLAR_ORGANIZATION_ID,
+  POLAR_WEBHOOK_SECRET: process.env.POLAR_WEBHOOK_SECRET,
+  POLAR_API_URL: process.env.POLAR_API_URL,
 };
 
 /**
@@ -49,6 +61,9 @@ export const clientSchema = z.object({
   // Supabase
   NEXT_PUBLIC_SUPABASE_URL: z.string(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string(),
+
+  // App Configuration
+  NEXT_PUBLIC_BASE_URL: z.string().optional().default("http://localhost:3000"),
 });
 
 /**
@@ -61,4 +76,7 @@ export const clientEnv = {
   // Supabase
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+
+  // App Configuration
+  NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
 };
