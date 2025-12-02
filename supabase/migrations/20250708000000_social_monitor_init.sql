@@ -97,4 +97,4 @@ $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER update_twitter_accounts_updated_at
   BEFORE UPDATE ON public.twitter_accounts
-  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();  
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
