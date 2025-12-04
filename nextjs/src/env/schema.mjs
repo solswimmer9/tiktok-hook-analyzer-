@@ -18,6 +18,9 @@ export const serverSchema = z.object({
   // Inngest (only required in production)
   INNGEST_EVENT_KEY: z.string().optional(),
   INNGEST_SIGNING_KEY: z.string().optional(),
+
+  // Gemini API (for video hook analysis)
+  GEMINI_API_KEY: z.string(),
 });
 
 /**
@@ -38,6 +41,9 @@ export const serverEnv = {
   // Inngest
   INNGEST_EVENT_KEY: process.env.INNGEST_EVENT_KEY,
   INNGEST_SIGNING_KEY: process.env.INNGEST_SIGNING_KEY,
+
+  // Gemini API
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
 };
 
 /**

@@ -300,6 +300,7 @@ export const tiktokRouter = createTRPCRouter({
       let query = ctx.supabase
         .from("trend_analysis")
         .select("*")
+        .eq("user_id", ctx.user.id)
         .order("date", { ascending: false })
         .range(input.offset, input.offset + input.limit - 1);
 
@@ -319,6 +320,7 @@ export const tiktokRouter = createTRPCRouter({
       const { data, error } = await ctx.supabase
         .from("trend_analysis")
         .select("*")
+        .eq("user_id", ctx.user.id)
         .eq("id", input.id)
         .single();
 
@@ -336,6 +338,7 @@ export const tiktokRouter = createTRPCRouter({
         name: "tiktok/generate-trends",
         data: {
           date,
+          userId: ctx.user.id,
         },
       });
 

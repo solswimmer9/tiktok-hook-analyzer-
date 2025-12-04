@@ -432,15 +432,19 @@ export const generateTrendAnalysis = inngestClient.createFunction(
     id: "tiktok/generate-trends",
     retries: 3, // Retry failed jobs up to 3 times
   },
-  [
-    { event: "tiktok/generate-trends" },
-    { cron: "0 6 * * *" } // Run daily at 6 AM
-  ],
+  {
+    event: "tiktok/generate-trends",
+  },
   async ({ event, step, logger }) => {
-    const { date } = event.data;
+    const { date, userId } = event.data;
     const analysisDate = date || new Date().toISOString().split('T')[0];
 
-    logger.info(`Generating trend analysis for date: ${analysisDate}`);
+    if (!userId) {
+      logger.error('Missing userId for trend analysis job');
+      throw new Error('userId is required to generate trend analysis');
+    }
+
+    logger.info(`Generating trend analysis for user ${userId} on date: ${analysisDate}`);
 
     // Step 1: Get all hook analyses from the specified date
     const hookAnalyses = await step.run("db: fetch hook analyses", async () => {
@@ -460,10 +464,12 @@ export const generateTrendAnalysis = inngestClient.createFunction(
             share_count,
             comment_count,
             search_terms!inner (
-              term
+              term,
+              user_id
             )
           )
         `)
+        .eq("tiktok_videos.search_terms.user_id", userId)
         .gte("processed_at", startDate.toISOString())
         .lt("processed_at", endDate.toISOString());
 
@@ -489,13 +495,14 @@ export const generateTrendAnalysis = inngestClient.createFunction(
       const { error } = await supabaseServer
         .from("trend_analysis")
         .upsert({
+          user_id: userId,
           date: analysisDate,
           analysis_results: trendAnalysis,
           total_videos_analyzed: hookAnalyses.length,
           common_phrases: trendAnalysis.commonPhrases,
           visual_themes: trendAnalysis.visualThemes,
           engagement_patterns: trendAnalysis.engagementPatterns,
-        }, { onConflict: "date" });
+        }, { onConflict: "user_id,date" });
 
       if (error) throw error;
     });
@@ -506,6 +513,7 @@ export const generateTrendAnalysis = inngestClient.createFunction(
       commonPhrases: trendAnalysis.commonPhrases.length,
       visualThemes: trendAnalysis.visualThemes.length,
       engagementPatterns: trendAnalysis.engagementPatterns.length,
+      userId,
     };
   }
 );
