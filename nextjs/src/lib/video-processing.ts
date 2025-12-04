@@ -1,6 +1,6 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { readFile, writeFile, unlink } from 'fs/promises';
+import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import crypto from 'crypto';
@@ -12,7 +12,6 @@ export interface VideoProcessingResult {
   originalSize: number;
   processedSize: number;
   trimmed: boolean;
-  base64: string;
   tempFilePath: string;
 }
 
@@ -144,10 +143,6 @@ export class VideoProcessor {
       }
     }
 
-    // Convert to base64
-    const videoBuffer = await readFile(currentPath);
-    const base64 = videoBuffer.toString('base64');
-
     // Get final size
     const finalInfo = await this.getVideoInfo(currentPath);
 
@@ -155,7 +150,6 @@ export class VideoProcessor {
       originalSize: originalInfo.size,
       processedSize: finalInfo.size,
       trimmed,
-      base64,
       tempFilePath: currentPath,
     };
   }
