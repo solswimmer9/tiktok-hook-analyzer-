@@ -30,7 +30,6 @@ export const appConfig = {
   // Dashboard configuration
   dashboard: {
     defaultRoute: "/dashboard/tiktok",
-    showSettings: true,
     navigation: [
       {
         title: "TikTok Analysis",
@@ -50,11 +49,6 @@ export const appConfig = {
         title: "Pricing",
         url: "/pricing",
         icon: "DollarSign",
-      },
-      {
-        title: "Settings",
-        url: "/dashboard/settings",
-        icon: "Settings",
       },
     ],
   },
