@@ -68,7 +68,7 @@ export const searchTikTokVideos = inngestClient.createFunction(
 
       const { data, error } = await supabaseServer
         .from("tiktok_videos")
-        .upsert(videosToSave, { onConflict: "video_id" })
+        .upsert(videosToSave, { onConflict: "search_term_id,video_id" })
         .select("id, video_id, video_url");
 
       if (error) throw error;
